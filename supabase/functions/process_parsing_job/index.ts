@@ -121,26 +121,12 @@ Deno.serve(async (req: Request) => {
         console.log("Attempting to use external PDF extractor API...");
 
         try {
-          const { data: apiKeyData } = await supabase
-            .from("system_config")
-            .select("value")
-            .eq("key", "PDF_EXTRACTOR_API_KEY")
-            .single();
-
-          const pdfExtractorKey = apiKeyData?.value || Deno.env.get("PDF_EXTRACTOR_API_KEY");
-
           const file = new File([fileBuffer], typedJob.file_name, { type: "application/pdf" });
           const formData = new FormData();
           formData.append("file", file);
 
-          const extractorHeaders: Record<string, string> = {};
-          if (pdfExtractorKey) {
-            extractorHeaders["X-API-Key"] = pdfExtractorKey;
-          }
-
           const extractorResponse = await fetch(`${PDF_EXTRACTOR_BASE_URL}/extract-quote`, {
             method: "POST",
-            headers: extractorHeaders,
             body: formData,
           });
 
@@ -302,7 +288,7 @@ Deno.serve(async (req: Request) => {
 
         const chunkText = `${chunks[i]}\n\nSupplier: ${typedJob.supplier_name}\nDocument: ${typedJob.file_name}\nChunk ${chunkNum} of ${totalChunks}`;
 
-        const timeoutMs = 180000;
+        const timeoutMs = 180000; // 3 minutes for large documents
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -356,6 +342,7 @@ Deno.serve(async (req: Request) => {
 
         const parseResult = await llmRes.json();
 
+        // Check if the LLM parser returned an error
         if (!parseResult.success || parseResult.error) {
           const errorMsg = parseResult.error || 'LLM parsing failed without error message';
           console.error(`Chunk ${chunkNum} LLM parser error:`, errorMsg);
