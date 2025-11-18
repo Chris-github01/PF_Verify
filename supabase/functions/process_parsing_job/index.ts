@@ -457,30 +457,20 @@ Deno.serve(async (req: Request) => {
 
         const lineItemsTotal = parsedLines.reduce((sum: number, line: any) => sum + (line.total || 0), 0);
 
-        // Find the grand total across all chunks (take the maximum as it's likely the document grand total)
-        const { data: allChunks } = await supabase
+        // Check for grand total from the last chunk that might have seen it
+        const { data: lastChunk } = await supabase
           .from("parsing_chunks")
           .select("metadata")
           .eq("job_id", jobId)
-          .order("chunk_number", { ascending: true });
+          .order("chunk_number", { ascending: false })
+          .limit(1)
+          .single();
 
-        let grandTotal = 0;
-        if (allChunks && allChunks.length > 0) {
-          // Find the maximum quoteTotalAmount across all chunks
-          for (const chunk of allChunks) {
-            const chunkTotal = parseFloat(chunk.metadata?.quoteTotalAmount || 0);
-            if (chunkTotal > grandTotal) {
-              grandTotal = chunkTotal;
-            }
-          }
-        }
-
+        const grandTotal = lastChunk?.metadata?.quoteTotalAmount;
         let finalTotal = lineItemsTotal;
         let contingencyAdded = false;
 
-        console.log(`[Contingency Check] Line items total: $${lineItemsTotal}, Document grand total: $${grandTotal}`);
-
-        if (grandTotal > 0 && grandTotal > lineItemsTotal + 1) {
+        if (grandTotal && grandTotal > lineItemsTotal + 1) {
           const contingencyAmount = grandTotal - lineItemsTotal;
           console.log(`Grand total ($${grandTotal}) exceeds line items total ($${lineItemsTotal}). Adding contingency: $${contingencyAmount}`);
 

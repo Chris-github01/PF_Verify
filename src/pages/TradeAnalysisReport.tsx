@@ -3,8 +3,8 @@ import { Filter, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { buildComparisonRows, buildMultiSupplierComparison, calculateSectionStats, calculateTotalsSummary, getVarianceColor } from '../lib/tradeAnalysis/varianceCalculator';
-import TradeAnalysisExports from '../components/TradeAnalysisExports';
-import TradeAnalysisPanel from '../components/TradeAnalysisPanel';
+import TradeAnalysisExports from '@/components/TradeAnalysisExports';
+import TradeAnalysisPanel from '@/components/TradeAnalysisPanel';
 import type {
   SupplierOption,
   SupplierQuoteItem,
