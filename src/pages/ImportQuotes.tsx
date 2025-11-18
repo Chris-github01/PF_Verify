@@ -689,29 +689,6 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         </div>
       </div>
 
-      {extractorStatus === 'extracting' && (
-        <div className="mt-4 border border-blue-500 bg-blue-50 text-blue-900 px-4 py-3 rounded-lg mb-6">
-          <strong>PDF Extractor:</strong> Extracting quote from PDF…
-        </div>
-      )}
-
-      {extractorError && (
-        <div className="mt-2 border border-red-500 bg-red-50 text-red-900 px-4 py-3 rounded-lg mb-6">
-          <strong>PDF Extractor Error:</strong> {extractorError}
-        </div>
-      )}
-
-      {extractorDebug && (
-        <div className="mt-4 border-2 border-green-500 bg-slate-950 text-slate-100 px-4 py-3 rounded-lg max-h-96 overflow-auto mb-6">
-          <p className="text-sm font-semibold mb-2 text-green-400">
-            PDF Extractor Debug (text + tables)
-          </p>
-          <pre className="text-xs whitespace-pre-wrap">
-            {JSON.stringify(extractorDebug, null, 2)}
-          </pre>
-        </div>
-      )}
-
       {parsing && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl mb-6 p-4">
           <div className="flex items-center gap-3">
