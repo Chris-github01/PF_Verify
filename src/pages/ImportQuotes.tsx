@@ -445,6 +445,14 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
     setMessage(null);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-gray-600">Loading project information...</div>
+      </div>
+    );
+  }
+
   if (parsedLines.length > 0) {
     return (
       <div className="p-6 max-w-full">
@@ -524,14 +532,6 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             Go to Project Dashboard
           </button>
         </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-gray-600">Loading project information...</div>
       </div>
     );
   }
