@@ -107,16 +107,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // STEP 1: Simplified counting - just extract everything and let post-processing filter
-    const countingPrompt = `You are extracting line items from a construction quote.
+    // STEP 1: Count billable line items (NOT section totals)
+    const countingPrompt = `Count billable line items in this construction quote.
 
-Count EVERY row that has: description, quantity, unit, and price/total.
+A LINE ITEM has all of: description, quantity, unit, rate, total.
 
-Skip only: table headers, page numbers, and rows that say "grand total" or "total estimate".
+DO NOT COUNT:
+- Rows with "subtotal", "sub-total", "section total"
+- Rows with "total", "grand total", "total estimate"
+- Section headers (even if they have amounts)
+- Table headers
 
-If a row has quantity and price data, COUNT IT (even if it says "subtotal" - we'll filter later).
-
-Better to overcount than miss items.
+Also extract the document's grand total amount.
 
 Return JSON:
 {
@@ -159,20 +161,24 @@ ${text}`;
     console.log('[LLM Fallback] Quote structure:', countData.structure);
     console.log('[LLM Fallback] Notes:', countData.notes);
 
-    // STEP 2: Extract all line items (simplified)
-    const systemPrompt = `Extract approximately ${countData.lineItemCount} line items from this construction quote.
+    // STEP 2: Extract line items (excluding subtotals)
+    const systemPrompt = `Extract ${countData.lineItemCount} billable line items from this construction quote.
 
-Extract every row with: description, quantity, unit, and price.
+EXTRACT ONLY line items with: description, quantity, unit, rate/price, total.
 
-Skip only: "grand total", "total estimate", headers, page numbers.
+DO NOT EXTRACT:
+- Subtotals (rows with "subtotal", "sub-total", "section total")
+- Grand totals (rows with "total", "grand total", "total estimate")
+- Section headers without quantity/rate details
+- Table headers, page numbers
 
 For each item extract:
-- description: text describing the item
-- qty: number from quantity column
-- unit: unit of measure (M, Nr, EA, etc)
+- description: item description
+- qty: quantity (integer)
+- unit: unit of measure
 - rate: unit price (calculate as total/qty if not shown)
-- total: total price for this line
-- section: category/section name if visible
+- total: line total
+- section: section/category name
 
 Return JSON:
 {
@@ -229,10 +235,12 @@ Return JSON with all items found.`;
     console.log(`[LLM Fallback] Raw items from LLM: ${rawItems.length}`);
 
     const TOTAL_PATTERNS = [
-      /^grand[-\s]?total$/i,
-      /^total[-\s]?estimate$/i,
-      /\btotal\s*estimate\s*:/i,
-      /\bgrand\s*total\s*:/i,
+      /\b(sub[-\s]?total|subtotal)\b/i,
+      /\b(section[-\s]?total|block[-\s]?total)\b/i,
+      /\b(grand[-\s]?total|total[-\s]?estimate)\b/i,
+      /\b(page[-\s]?total)\b/i,
+      /^total$/i,
+      /\btotal\s*:/i,
     ];
 
     const EXCLUSION_PATTERNS = [
