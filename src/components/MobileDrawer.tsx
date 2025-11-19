@@ -19,7 +19,7 @@ import {
   FileDown,
 } from 'lucide-react';
 import type { PrimaryTab } from './AppBar';
-import type { SecondaryTab } from './SecondaryContextBar';
+type SecondaryTab = string;
 
 interface MobileDrawerProps {
   isOpen: boolean;

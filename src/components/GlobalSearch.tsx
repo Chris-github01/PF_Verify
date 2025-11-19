@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, ArrowRight } from 'lucide-react';
-import type { SecondaryTab } from './SecondaryContextBar';
+
+type SecondaryTab = string;
 
 interface SearchResult {
   id: SecondaryTab;

@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { Folders, Upload, TrendingUp, FileText, Search, Bell, Settings as SettingsIcon, Menu, X, Sparkles, LogOut } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import ProjectSwitcher from './ProjectSwitcher';
+import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 
 export type PrimaryTab = 'project' | 'import' | 'analysis' | 'reports';
@@ -58,13 +56,10 @@ export default function AppBar({
               PassiveFire Verify+
             </h1>
 
-            {currentProjectId && currentProjectName && onProjectChange && onBackToDashboard && (
-              <ProjectSwitcher
-                currentProjectId={currentProjectId}
-                currentProjectName={currentProjectName}
-                onProjectChange={onProjectChange}
-                onBackToDashboard={onBackToDashboard}
-              />
+            {currentProjectId && currentProjectName && (
+              <div className="text-sm text-gray-600 ml-4">
+                {currentProjectName}
+              </div>
             )}
           </div>
 

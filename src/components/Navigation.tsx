@@ -1,6 +1,5 @@
 import { LayoutDashboard, FileUp, ClipboardCheck, Grid3x3, Scale, FileBarChart, Brain, BarChart3, DollarSign, TrendingUp, FileText, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
-import ProjectSwitcher from './ProjectSwitcher';
 
 type Tab = 'dashboard' | 'import' | 'review' | 'scope' | 'equalisation' | 'award' | 'quoteintel' | 'basetracker' | 'claimsvariations' | 'tradeanalysis' | 'insights' | 'settings';
 
@@ -47,14 +46,6 @@ export default function Navigation({
                 <span className="text-gray-300 font-normal text-sm ml-2">— {currentProjectName}</span>
               )}
             </h1>
-            {currentProjectId && currentProjectName && onProjectChange && onBackToDashboard && (
-              <ProjectSwitcher
-                currentProjectId={currentProjectId}
-                currentProjectName={currentProjectName}
-                onProjectChange={onProjectChange}
-                onBackToDashboard={onBackToDashboard}
-              />
-            )}
           </div>
           <div className="flex space-x-1">
             {tabs.map((tab) => {
