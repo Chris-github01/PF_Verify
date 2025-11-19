@@ -21,10 +21,6 @@ export interface Database {
           created_by: string | null
           created_at: string
           updated_at: string
-          approved_supplier_id: string | null
-          approved_at: string | null
-          approved_by: string | null
-          approval_notes: string | null
         }
         Insert: {
           id?: string
@@ -37,10 +33,6 @@ export interface Database {
           created_by?: string | null
           created_at?: string
           updated_at?: string
-          approved_supplier_id?: string | null
-          approved_at?: string | null
-          approved_by?: string | null
-          approval_notes?: string | null
         }
         Update: {
           id?: string
@@ -53,10 +45,6 @@ export interface Database {
           created_by?: string | null
           created_at?: string
           updated_at?: string
-          approved_supplier_id?: string | null
-          approved_at?: string | null
-          approved_by?: string | null
-          approval_notes?: string | null
         }
       }
       organisations: {
@@ -212,10 +200,6 @@ export interface Database {
           quote_intelligence_completed: boolean
           scope_matrix_completed: boolean
           trade_analysis_completed: boolean
-          award_report_reviewed: boolean
-          preferred_supplier_approved: boolean
-          rfi_generated: boolean
-          unsuccessful_letters_generated: boolean
           created_at: string
           updated_at: string
         }
@@ -228,10 +212,6 @@ export interface Database {
           quote_intelligence_completed?: boolean
           scope_matrix_completed?: boolean
           trade_analysis_completed?: boolean
-          award_report_reviewed?: boolean
-          preferred_supplier_approved?: boolean
-          rfi_generated?: boolean
-          unsuccessful_letters_generated?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -244,10 +224,6 @@ export interface Database {
           quote_intelligence_completed?: boolean
           scope_matrix_completed?: boolean
           trade_analysis_completed?: boolean
-          award_report_reviewed?: boolean
-          preferred_supplier_approved?: boolean
-          rfi_generated?: boolean
-          unsuccessful_letters_generated?: boolean
           created_at?: string
           updated_at?: string
         }
