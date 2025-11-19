@@ -342,23 +342,18 @@ Deno.serve(async (req: Request) => {
 
         const parseResult = await llmRes.json();
         const chunkItems = parseResult.lines || parseResult.items || [];
-        const chunkMetadata = parseResult.metadata || {};
 
         await supabase
           .from("parsing_chunks")
           .update({
             status: 'completed',
-            parsed_items: chunkItems,
-            metadata: chunkMetadata
+            parsed_items: chunkItems
           })
           .eq("job_id", jobId)
           .eq("chunk_number", chunkNum);
 
         allItems.push(...chunkItems);
         console.log(`Chunk ${chunkNum} completed: ${chunkItems.length} items (total so far: ${allItems.length})`);
-        if (chunkMetadata.quoteTotalAmount) {
-          console.log(`Chunk ${chunkNum} reported quote total: $${chunkMetadata.quoteTotalAmount}`);
-        }
 
         const progress = 50 + Math.floor((chunkNum / totalChunks) * 30);
         await supabase
@@ -455,53 +450,12 @@ Deno.serve(async (req: Request) => {
 
         console.log(`Successfully inserted ${quoteItems.length} quote items`);
 
-        const lineItemsTotal = parsedLines.reduce((sum: number, line: any) => sum + (line.total || 0), 0);
-
-        // Check for grand total from the last chunk that might have seen it
-        const { data: lastChunk } = await supabase
-          .from("parsing_chunks")
-          .select("metadata")
-          .eq("job_id", jobId)
-          .order("chunk_number", { ascending: false })
-          .limit(1)
-          .single();
-
-        const grandTotal = lastChunk?.metadata?.quoteTotalAmount;
-        let finalTotal = lineItemsTotal;
-        let contingencyAdded = false;
-
-        if (grandTotal && grandTotal > lineItemsTotal + 1) {
-          const contingencyAmount = grandTotal - lineItemsTotal;
-          console.log(`Grand total ($${grandTotal}) exceeds line items total ($${lineItemsTotal}). Adding contingency: $${contingencyAmount}`);
-
-          const { error: contingencyError } = await supabase
-            .from("quote_items")
-            .insert({
-              quote_id: quoteId,
-              description: "Contingency / Additional Items",
-              quantity: 1,
-              unit: "Sum",
-              unit_price: contingencyAmount,
-              total_price: contingencyAmount,
-              scope_category: "Contingency",
-              is_excluded: false,
-              notes: "Auto-generated: Difference between grand total and parsed line items",
-            });
-
-          if (!contingencyError) {
-            finalTotal = grandTotal;
-            contingencyAdded = true;
-            console.log(`Successfully added contingency item of $${contingencyAmount}`);
-          } else {
-            console.error("Failed to add contingency item:", contingencyError);
-          }
-        }
-
+        const totalAmount = parsedLines.reduce((sum: number, line: any) => sum + (line.total || 0), 0);
         await supabase
           .from("quotes")
           .update({
-            total_amount: finalTotal,
-            items_count: parsedLines.length + (contingencyAdded ? 1 : 0),
+            total_amount: totalAmount,
+            items_count: parsedLines.length,
           })
           .eq("id", quoteId);
       }
