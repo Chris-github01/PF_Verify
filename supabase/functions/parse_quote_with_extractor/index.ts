@@ -151,8 +151,27 @@ Deno.serve(async (req: Request) => {
 
     const parseResult = await llmResponse.json();
     const items = parseResult.lines || parseResult.items || [];
+    const grandTotal = parseResult.totals?.grandTotal || parseResult.grandTotal || parseResult.quoteTotalAmount;
 
-    console.log(`AI parser extracted ${items.length} items`);
+    console.log(`AI parser extracted ${items.length} items, grand total: ${grandTotal}`);
+
+    const lineItemsTotal = items.reduce((sum: number, item: any) => {
+      const itemTotal = parseFloat(item.total || item.amount || "0");
+      return sum + itemTotal;
+    }, 0);
+
+    const quotedTotal = grandTotal || null;
+    const contingencyAmount = quotedTotal && quotedTotal > lineItemsTotal
+      ? quotedTotal - lineItemsTotal
+      : 0;
+    const totalAmount = quotedTotal || lineItemsTotal;
+
+    console.log("Quote totals:", {
+      lineItemsTotal,
+      quotedTotal,
+      contingencyAmount,
+      totalAmount
+    });
 
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
@@ -161,9 +180,13 @@ Deno.serve(async (req: Request) => {
         supplier_name: supplierName,
         file_name: fileName,
         file_url: storagePath,
+        total_amount: totalAmount,
+        quoted_total: quotedTotal,
+        contingency_amount: contingencyAmount,
+        items_count: items.length,
         user_id: userId,
         organisation_id: project.organisation_id,
-        status: "active",
+        status: "pending",
         metadata: {
           extractor_used: "external_direct",
           num_pages: extractorData.num_pages,
@@ -183,12 +206,10 @@ Deno.serve(async (req: Request) => {
       const quoteItems = items.map((item: any) => ({
         quote_id: quote.id,
         description: item.description || item.desc || "",
-        qty: parseFloat(item.qty || item.quantity || "0"),
+        quantity: parseFloat(item.qty || item.quantity || "0"),
         unit: item.unit || "",
         unit_price: parseFloat(item.unit_price || item.unitPrice || item.rate || "0"),
-        total: parseFloat(item.total || item.amount || "0"),
-        user_id: userId,
-        organisation_id: project.organisation_id,
+        total_price: parseFloat(item.total || item.amount || "0"),
       }));
 
       const { error: itemsError } = await supabase
