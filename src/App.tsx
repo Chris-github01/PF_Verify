@@ -52,9 +52,21 @@ function AppContent() {
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
 
   useEffect(() => {
+    const loadTimeout = setTimeout(() => {
+      if (authLoading) {
+        console.warn('Auth loading timeout - forcing completion');
+        setAuthLoading(false);
+      }
+    }, 5000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setAuthLoading(false);
+      clearTimeout(loadTimeout);
+    }).catch((error) => {
+      console.error('Error loading session:', error);
+      setAuthLoading(false);
+      clearTimeout(loadTimeout);
     });
 
     const {
@@ -65,7 +77,10 @@ function AppContent() {
       })();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(loadTimeout);
+    };
   }, []);
 
   useEffect(() => {
