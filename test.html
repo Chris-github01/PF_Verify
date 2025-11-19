@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body>
+    <h1>Test Page</h1>
+    <p>If you see this, the server is working.</p>
+    <script>
+        console.log('Test script executed');
+        fetch('/src/main.tsx')
+            .then(r => r.text())
+            .then(t => console.log('main.tsx loaded:', t.substring(0, 100)))
+            .catch(e => console.error('Failed to load main.tsx:', e));
+    </script>
+</body>
+</html>
