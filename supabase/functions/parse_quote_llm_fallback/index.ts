@@ -108,12 +108,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // STEP 1: Ask LLM to count and identify line items first
-    const countingPrompt = `Analyze this construction quote document and identify ALL line items.
+    const countingPrompt = `Analyze this construction quote document and identify the line items section.
 
-CRITICAL: This is a CHUNK of a larger document (${chunkInfo || 'unknown position'}).
-Count EVERY line item in this chunk, even if tables continue across pages.
-
-TASK: Count how many actual billable line items exist in THIS CHUNK (NOT including subtotals, headers, footers).
+TASK: Count how many actual billable line items exist (NOT including subtotals, headers, footers).
 
 RULES FOR COUNTING:
 1. Line items MUST have: description, quantity, unit, rate, and total
@@ -127,13 +124,7 @@ RULES FOR COUNTING:
 4. DO NOT count page numbers, footers, or notes
 5. DO NOT count empty rows or placeholder rows
 6. If a line describes a summary of other lines below it, DO NOT count it
-7. Count ALL detailed billable items in this chunk - look carefully for multi-page tables
-
-IMPORTANT FOR CHUNKED DOCUMENTS:
-- Tables may span across pages within this chunk
-- Look for table continuations (same column structure on multiple pages)
-- Count items from ALL pages in this chunk
-- If you see "continued" or page breaks, keep counting items after the break
+7. Only count the DETAILED billable items, not their summaries
 
 EXAMPLES OF WHAT TO EXCLUDE:
 - "Subtotal for Section A: $10,000" ❌ (this is a summary)
@@ -152,13 +143,13 @@ OUTPUT FORMAT (JSON only):
   "lineItemCount": number,
   "quoteTotalAmount": number,
   "structure": "detailed" | "two-tier" | "lump-sum-only",
-  "notes": "brief explanation - mention if tables span multiple pages"
+  "notes": "brief explanation - mention if you saw summary lines that were excluded"
 }
 
-DOCUMENT CHUNK:
+DOCUMENT:
 ${text}
 
-Count ALL line items in this chunk across all pages shown.`;
+Count the line items and identify the structure.`;
 
     console.log('[LLM Fallback] Step 1: Counting line items...', text.length, 'chars');
 
@@ -195,16 +186,11 @@ Count ALL line items in this chunk across all pages shown.`;
     // STEP 2: Extract EXACTLY that many line items
     const systemPrompt = `You are an expert at parsing construction quotes.
 
-CRITICAL: This chunk has EXACTLY ${countData.lineItemCount} billable line items.
-Extract ALL ${countData.lineItemCount} items - do not miss any items.
+CRITICAL: The document has EXACTLY ${countData.lineItemCount} billable line items.
+Extract ONLY those ${countData.lineItemCount} items - nothing more, nothing less.
 
 DOCUMENT STRUCTURE: ${countData.structure}
 ${countData.notes ? `NOTES: ${countData.notes}` : ''}
-
-IMPORTANT: This is a CHUNK (${chunkInfo || 'unknown position'}) of a larger document.
-- Tables may continue across multiple pages within this chunk
-- Extract items from ALL pages in the chunk
-- Don't stop at page breaks - keep extracting if the table continues
 
 DO NOT EXTRACT (THESE ARE NOT LINE ITEMS):
 1. Any row containing: "subtotal", "sub-total", "sub total", "total", "totals"
