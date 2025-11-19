@@ -107,49 +107,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // STEP 1: Ask LLM to count and identify line items first
-    const countingPrompt = `Analyze this construction quote document and identify the line items section.
+    // STEP 1: Simplified counting - just extract everything and let post-processing filter
+    const countingPrompt = `You are extracting line items from a construction quote.
 
-TASK: Count how many actual billable line items exist (NOT including subtotals, headers, footers).
+Count EVERY row that has: description, quantity, unit, and price/total.
 
-RULES FOR COUNTING:
-1. Line items MUST have: description, quantity, unit, rate, and total
-2. DO NOT count ANY lines containing these keywords:
-   - "subtotal", "sub-total", "sub total"
-   - "total", "totals", "grand total", "section total", "page total"
-   - "carried forward", "brought forward", "c/f", "b/f"
-   - "contingency", "allowance", "provisional sum"
-   - "summary", "sum of", "cumulative"
-3. DO NOT count section headers or category headers (even if they have amounts)
-4. DO NOT count page numbers, footers, or notes
-5. DO NOT count empty rows or placeholder rows
-6. If a line describes a summary of other lines below it, DO NOT count it
-7. Only count the DETAILED billable items, not their summaries
+Skip only: table headers, page numbers, and rows that say "grand total" or "total estimate".
 
-EXAMPLES OF WHAT TO EXCLUDE:
-- "Subtotal for Section A: $10,000" ❌ (this is a summary)
-- "Total Fire Protection: $50,000" ❌ (this is a summary)
-- "Grand Total: $100,000" ❌ (this is a summary)
-- "Contingency 10%: $5,000" ❌ (contingencies are not line items)
-- "Section 1 - Fire Collars" ❌ (section header with no qty/unit/rate)
+If a row has quantity and price data, COUNT IT (even if it says "subtotal" - we'll filter later).
 
-EXAMPLES OF WHAT TO INCLUDE:
-- "Fire Collar Type A - 100mm diameter, Qty: 50, Rate: $125, Total: $6,250" ✓
-- "Intumescent Seal 3m length, Qty: 100, Rate: $45, Total: $4,500" ✓
-- "Installation Service, Qty: 1, Rate: $2,500, Total: $2,500" ✓
+Better to overcount than miss items.
 
-OUTPUT FORMAT (JSON only):
+Return JSON:
 {
   "lineItemCount": number,
-  "quoteTotalAmount": number,
-  "structure": "detailed" | "two-tier" | "lump-sum-only",
-  "notes": "brief explanation - mention if you saw summary lines that were excluded"
+  "quoteTotalAmount": number
 }
 
 DOCUMENT:
-${text}
-
-Count the line items and identify the structure.`;
+${text}`;
 
     console.log('[LLM Fallback] Step 1: Counting line items...', text.length, 'chars');
 
@@ -183,72 +159,35 @@ Count the line items and identify the structure.`;
     console.log('[LLM Fallback] Quote structure:', countData.structure);
     console.log('[LLM Fallback] Notes:', countData.notes);
 
-    // STEP 2: Extract EXACTLY that many line items
-    const systemPrompt = `You are an expert at parsing construction quotes.
+    // STEP 2: Extract all line items (simplified)
+    const systemPrompt = `Extract approximately ${countData.lineItemCount} line items from this construction quote.
 
-CRITICAL: The document has EXACTLY ${countData.lineItemCount} billable line items.
-Extract ONLY those ${countData.lineItemCount} items - nothing more, nothing less.
+Extract every row with: description, quantity, unit, and price.
 
-DOCUMENT STRUCTURE: ${countData.structure}
-${countData.notes ? `NOTES: ${countData.notes}` : ''}
+Skip only: "grand total", "total estimate", headers, page numbers.
 
-DO NOT EXTRACT (THESE ARE NOT LINE ITEMS):
-1. Any row containing: "subtotal", "sub-total", "sub total", "total", "totals"
-2. Any row containing: "grand total", "section total", "page total", "summary"
-3. Any row containing: "carried forward", "brought forward", "c/f", "b/f"
-4. Any row containing: "contingency", "allowance", "provisional sum"
-5. Section headers or category headers (even if they have dollar amounts)
-6. Table headers (e.g., "Description", "Qty", "Rate", "Amount")
-7. Page numbers, footers, notes, legal terms
-8. Empty or placeholder rows
-9. Summary rows that add up other line items
+For each item extract:
+- description: text describing the item
+- qty: number from quantity column
+- unit: unit of measure (M, Nr, EA, etc)
+- rate: unit price (calculate as total/qty if not shown)
+- total: total price for this line
+- section: category/section name if visible
 
-${countData.structure === 'two-tier' ? `
-TWO-TIER DETECTION:
-This quote has category lump sums AND detailed items.
-- Extract ONLY the category lump sums (e.g., "Collar", "Seal", "Insulation")
-- SKIP all detailed breakdowns (e.g., "PVC Pipe 100mm", "Cable Bundle 2x GIB")
-` : ''}
-
-EXTRACT ONLY:
-- Individual billable line items (NOT their summaries)
-- Each item MUST have all five fields: description, qty, unit, rate, total
-- If a row looks like a summary of other rows, SKIP IT
-- If a row contains summary keywords (total, subtotal, summary), SKIP IT
-- Stop after exactly ${countData.lineItemCount} items
-
-CRITICAL QUANTITY RULES:
-- Extract qty ONLY from the "Quantity" or "Qty" column
-- Quantities MUST be whole numbers (integers): 1, 2, 5, 100, 500, etc.
-- NEVER use decimal quantities: 5.2, 5.4, 3.7 are NOT valid quantities
-- If you see a decimal number, it's likely a page reference or section number - SKIP IT
-- If the quantity column is blank or shows "1 Sum" or "1 Lump", use qty=1
-
-CRITICAL RATE CALCULATION:
-- If the document shows ONLY a total (no separate rate): rate = total / qty
-- If the document shows qty, rate, AND total: extract all three as shown
-- NEVER put the total amount in the rate field
-- Example: "Collar  1  $540,242" should be: qty=1, rate=$540242, total=$540242
-- Example: "Cable Bundle  2  $228,344" should be: qty=2, rate=$114172, total=$228344
-
-COLUMN IDENTIFICATION:
-Look for columns labeled: "Description", "Qty" or "Quantity", "Unit", "Rate" or "Unit Price", "Total" or "Amount"
-Extract values from the CORRECT columns - don't mix up page numbers with quantities!
-
-OUTPUT FORMAT (JSON only):
+Return JSON:
 {
   "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
   "confidence": number,
   "warnings": ["string"]
 }`;
 
-    const userPrompt = `Extract EXACTLY ${countData.lineItemCount} line items from this quote:
+    const userPrompt = `Extract all line items from this quote:
 
 ${text}
 
 ${supplierName ? `Supplier: ${supplierName}` : ''}
 
-Extract exactly ${countData.lineItemCount} items. Return JSON.`;
+Return JSON with all items found.`;
 
     console.log('[LLM Fallback] Step 2: Extracting', countData.lineItemCount, 'items...');
 
@@ -290,13 +229,10 @@ Extract exactly ${countData.lineItemCount} items. Return JSON.`;
     console.log(`[LLM Fallback] Raw items from LLM: ${rawItems.length}`);
 
     const TOTAL_PATTERNS = [
-      /\b(sub[-\s]?total|subtotal)\b/i,
-      /\b(grand[-\s]?total|section[-\s]?total|block[-\s]?total)\b/i,
-      /\b(page[-\s]?total|cumulative|summary)\b/i,
-      /\b(sum[-\s]?of|total[-\s]?for)\b/i,
-      /^total$/i,
-      /^totals$/i,
-      /\btotal\s*:\s*\$/i,
+      /^grand[-\s]?total$/i,
+      /^total[-\s]?estimate$/i,
+      /\btotal\s*estimate\s*:/i,
+      /\bgrand\s*total\s*:/i,
     ];
 
     const EXCLUSION_PATTERNS = [
