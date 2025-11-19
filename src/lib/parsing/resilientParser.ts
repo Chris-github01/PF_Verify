@@ -32,10 +32,10 @@ async function callWithTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number
 ): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout>;
+  let timeoutId: number;
 
   const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => {
+    timeoutId = window.setTimeout(() => {
       reject(new Error('Request timeout'));
     }, timeoutMs);
   });
