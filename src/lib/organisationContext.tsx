@@ -31,39 +31,49 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   const loadOrganisations = async () => {
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    const { data: memberships } = await supabase
-      .from('organisation_members')
-      .select('organisation_id, organisations(*)')
-      .eq('user_id', user.id);
+      const { data: memberships, error } = await supabase
+        .from('organisation_members')
+        .select('organisation_id, organisations(*)')
+        .eq('user_id', user.id);
 
-    if (memberships) {
-      const orgs = memberships
-        .map((m: any) => m.organisations)
-        .filter(Boolean);
-      setOrganisations(orgs);
+      if (error) {
+        console.error('Error loading organisations:', error);
+        setLoading(false);
+        return;
+      }
 
-      const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
-      if (savedOrgId) {
-        const savedOrg = orgs.find((o: Organisation) => o.id === savedOrgId);
-        if (savedOrg) {
-          setCurrentOrganisation(savedOrg);
+      if (memberships) {
+        const orgs = memberships
+          .map((m: any) => m.organisations)
+          .filter(Boolean);
+        setOrganisations(orgs);
+
+        const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
+        if (savedOrgId) {
+          const savedOrg = orgs.find((o: Organisation) => o.id === savedOrgId);
+          if (savedOrg) {
+            setCurrentOrganisation(savedOrg);
+          } else if (orgs.length > 0) {
+            setCurrentOrganisation(orgs[0]);
+            localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
+          }
         } else if (orgs.length > 0) {
           setCurrentOrganisation(orgs[0]);
           localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
         }
-      } else if (orgs.length > 0) {
-        setCurrentOrganisation(orgs[0]);
-        localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
       }
+    } catch (error) {
+      console.error('Exception loading organisations:', error);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const refreshOrganisations = async () => {
