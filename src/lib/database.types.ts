@@ -268,6 +268,8 @@ export interface Database {
           updated_at: string
           user_id: string | null
           organisation_id: string | null
+          quoted_total: number | null
+          contingency_amount: number
         }
         Insert: {
           id?: string
@@ -284,6 +286,8 @@ export interface Database {
           updated_at?: string
           user_id?: string | null
           organisation_id?: string | null
+          quoted_total?: number | null
+          contingency_amount?: number
         }
         Update: {
           id?: string
@@ -300,6 +304,8 @@ export interface Database {
           updated_at?: string
           user_id?: string | null
           organisation_id?: string | null
+          quoted_total?: number | null
+          contingency_amount?: number
         }
       }
       quote_items: {

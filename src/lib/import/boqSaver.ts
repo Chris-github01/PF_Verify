@@ -35,7 +35,8 @@ function getSectionFromServiceType(serviceType: string): string {
 
 export async function saveBOQToDatabase(
   projectId: string,
-  boqData: NormalisedBOQRow[]
+  boqData: NormalisedBOQRow[],
+  quotedTotals?: Map<string, number>
 ): Promise<{ success: boolean; error?: string; suppliersCreated?: number }> {
   console.log('[BOQ Saver] Starting save process', { projectId, totalRows: boqData.length });
 
@@ -61,7 +62,20 @@ export async function saveBOQToDatabase(
     for (const [supplierName, rows] of supplierMap.entries()) {
       console.log('[BOQ Saver] Processing supplier', { supplierName, rowCount: rows.length });
 
-      const totalAmount = rows.reduce((sum, row) => sum + row.total, 0);
+      const lineItemsTotal = rows.reduce((sum, row) => sum + row.total, 0);
+      const quotedTotal = quotedTotals?.get(supplierName);
+      const contingencyAmount = quotedTotal && quotedTotal > lineItemsTotal
+        ? quotedTotal - lineItemsTotal
+        : 0;
+      const totalAmount = quotedTotal || lineItemsTotal;
+
+      console.log('[BOQ Saver] Quote totals calculated', {
+        supplierName,
+        lineItemsTotal,
+        quotedTotal,
+        contingencyAmount,
+        totalAmount
+      });
 
       const { data: quote, error: quoteError } = await supabase
         .from('quotes')
@@ -69,6 +83,8 @@ export async function saveBOQToDatabase(
           project_id: projectId,
           supplier_name: supplierName,
           total_amount: totalAmount,
+          quoted_total: quotedTotal || null,
+          contingency_amount: contingencyAmount,
           items_count: rows.length,
           status: 'pending',
           quote_reference: rows[0].sourceSheet || '',

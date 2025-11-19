@@ -7,6 +7,9 @@ interface Quote {
   id: string;
   supplier: string;
   quoteValue: number;
+  quotedTotal: number | null;
+  contingencyAmount: number;
+  lineItemsTotal: number;
   status: 'Draft' | 'Imported' | 'Reviewed' | 'Awarded';
   lastUpdated: string;
   owner: string;
@@ -24,6 +27,8 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [editingTotalQuoteId, setEditingTotalQuoteId] = useState<string | null>(null);
+  const [editTotalValue, setEditTotalValue] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const totalPages = 1;
@@ -41,35 +46,49 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
     try {
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount, status, updated_at')
+        .select('id, supplier_name, total_amount, status, updated_at, quoted_total, contingency_amount')
         .eq('project_id', projectId)
         .order('updated_at', { ascending: false });
 
       if (quotesData) {
         const { data: itemsData } = await supabase
           .from('quote_items')
-          .select('quote_id, quantity')
+          .select('quote_id, quantity, total_price')
           .in('quote_id', quotesData.map(q => q.id));
 
         const missingQtyByQuote = new Map<string, number>();
+        const lineItemsTotalByQuote = new Map<string, number>();
+
         if (itemsData) {
           itemsData.forEach(item => {
             if (needsQuantity(item)) {
               const count = missingQtyByQuote.get(item.quote_id) || 0;
               missingQtyByQuote.set(item.quote_id, count + 1);
             }
+            const currentTotal = lineItemsTotalByQuote.get(item.quote_id) || 0;
+            lineItemsTotalByQuote.set(item.quote_id, currentTotal + (item.total_price || 0));
           });
         }
 
-        const formattedQuotes: Quote[] = quotesData.map(q => ({
-          id: q.id,
-          supplier: q.supplier_name || 'Unknown Supplier',
-          quoteValue: q.total_amount || 0,
-          status: (q.status || 'Imported') as 'Draft' | 'Imported' | 'Reviewed' | 'Awarded',
-          lastUpdated: new Date(q.updated_at).toLocaleDateString(),
-          owner: 'PV',
-          missingQtyCount: missingQtyByQuote.get(q.id) || 0,
-        }));
+        const formattedQuotes: Quote[] = quotesData.map(q => {
+          const lineItemsTotal = lineItemsTotalByQuote.get(q.id) || 0;
+          const quotedTotal = q.quoted_total;
+          const contingencyAmount = q.contingency_amount || 0;
+          const displayTotal = quotedTotal || q.total_amount || lineItemsTotal;
+
+          return {
+            id: q.id,
+            supplier: q.supplier_name || 'Unknown Supplier',
+            quoteValue: displayTotal,
+            quotedTotal: quotedTotal,
+            contingencyAmount: contingencyAmount,
+            lineItemsTotal: lineItemsTotal,
+            status: (q.status || 'Imported') as 'Draft' | 'Imported' | 'Reviewed' | 'Awarded',
+            lastUpdated: new Date(q.updated_at).toLocaleDateString(),
+            owner: 'PV',
+            missingQtyCount: missingQtyByQuote.get(q.id) || 0,
+          };
+        });
         setQuotes(formattedQuotes);
       }
     } catch (error) {
@@ -137,6 +156,88 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cancelEdit();
+    }
+  };
+
+  const startEditTotal = (quote: Quote) => {
+    setEditingTotalQuoteId(quote.id);
+    setEditTotalValue((quote.quotedTotal || quote.quoteValue).toString());
+    setSaveError(null);
+
+    setTimeout(() => {
+      const input = document.querySelector(`input[data-total-quote-id="${quote.id}"]`) as HTMLInputElement;
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 50);
+  };
+
+  const cancelEditTotal = () => {
+    setEditingTotalQuoteId(null);
+    setEditTotalValue('');
+    setSaveError(null);
+  };
+
+  const saveEditTotal = async () => {
+    if (!editingTotalQuoteId || !editTotalValue.trim()) {
+      setSaveError('Quote total is required');
+      return;
+    }
+
+    const newTotal = parseFloat(editTotalValue);
+    if (isNaN(newTotal) || newTotal < 0) {
+      setSaveError('Please enter a valid positive number');
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const quote = quotes.find(q => q.id === editingTotalQuoteId);
+      if (!quote) throw new Error('Quote not found');
+
+      const lineItemsTotal = quote.lineItemsTotal;
+      const contingencyAmount = Math.max(0, newTotal - lineItemsTotal);
+
+      const { error } = await supabase
+        .from('quotes')
+        .update({
+          quoted_total: newTotal,
+          total_amount: newTotal,
+          contingency_amount: contingencyAmount
+        })
+        .eq('id', editingTotalQuoteId);
+
+      if (error) throw error;
+
+      setQuotes(prev =>
+        prev.map(q => q.id === editingTotalQuoteId ? {
+          ...q,
+          quoteValue: newTotal,
+          quotedTotal: newTotal,
+          contingencyAmount: contingencyAmount
+        } : q)
+      );
+
+      setEditingTotalQuoteId(null);
+      setEditTotalValue('');
+    } catch (error) {
+      console.error('Error saving quote total:', error);
+      setSaveError('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTotalKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEditTotal();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditTotal();
     }
   };
 
@@ -274,8 +375,65 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
                       </div>
                     )}
                   </td>
-                  <td className="font-semibold text-gray-900">
-                    ${quote.quoteValue.toLocaleString()}
+                  <td className="px-4 py-3">
+                    {editingTotalQuoteId === quote.id ? (
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">$</span>
+                          <input
+                            type="number"
+                            data-total-quote-id={quote.id}
+                            value={editTotalValue}
+                            onChange={(e) => setEditTotalValue(e.target.value)}
+                            onKeyDown={handleTotalKeyDown}
+                            disabled={saving}
+                            className="w-32 h-8 rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] transition"
+                            placeholder="Enter total"
+                          />
+                          <button
+                            onClick={saveEditTotal}
+                            disabled={saving || !editTotalValue.trim()}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full cursor-pointer text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                            title="Save"
+                          >
+                            <Check size={14} strokeWidth={2} />
+                          </button>
+                          <button
+                            onClick={cancelEditTotal}
+                            disabled={saving}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full cursor-pointer text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                            title="Cancel"
+                          >
+                            <X size={14} strokeWidth={2} />
+                          </button>
+                        </div>
+                        {saveError && (
+                          <p className="mt-1 text-[11px] text-red-500">{saveError}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-center gap-1.5 group cursor-default">
+                          <span className="font-semibold text-gray-900">
+                            ${quote.quoteValue.toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => startEditTotal(quote)}
+                            className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded cursor-pointer text-slate-400 group-hover:text-[#0A66C2] hover:bg-slate-100 transition-colors duration-150"
+                            title="Edit quote total"
+                          >
+                            <Edit3 size={12} strokeWidth={1.5} />
+                          </button>
+                        </div>
+                        {quote.contingencyAmount > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Line items: ${quote.lineItemsTotal.toLocaleString()}
+                            <br />
+                            Contingency: ${quote.contingencyAmount.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <span className={getStatusClass(quote.status)}>{quote.status}</span>
