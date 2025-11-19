@@ -14,6 +14,7 @@ interface OrganisationContextType {
   loading: boolean;
   setCurrentOrganisation: (org: Organisation | null) => void;
   refreshOrganisations: () => Promise<void>;
+  hasPermission: (permission: string) => boolean;
 }
 
 const OrganisationContext = createContext<OrganisationContextType | undefined>(undefined);
@@ -78,6 +79,10 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const hasPermission = (permission: string) => {
+    return true;
+  };
+
   return (
     <OrganisationContext.Provider
       value={{
@@ -86,6 +91,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         loading,
         setCurrentOrganisation: handleSetCurrentOrganisation,
         refreshOrganisations,
+        hasPermission,
       }}
     >
       {children}
