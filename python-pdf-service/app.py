@@ -29,12 +29,31 @@ def verify_api_key():
         return False
     return True
 
+@app.route('/', methods=['GET'])
+def index():
+    """Root endpoint."""
+    return jsonify({
+        'service': 'PDF Parser Ensemble',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/health',
+            'parse_ensemble': '/parse/ensemble',
+            'parse_auto': '/parse/auto',
+            'parse_pdfplumber': '/parse/pdfplumber',
+            'parse_pymupdf': '/parse/pymupdf',
+            'parse_ocr': '/parse/ocr',
+            'parse_textract': '/parse/textract',
+            'parse_docai': '/parse/docai'
+        }
+    })
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
     return jsonify({
         'status': 'healthy',
         'service': 'pdf-parser-ensemble',
+        'version': '1.0.0',
         'parsers': {
             'pdfplumber': True,
             'pymupdf': True,
@@ -165,6 +184,11 @@ def parse_ensemble():
         file = request.files['file']
         pdf_bytes = file.read()
 
+        if not pdf_bytes:
+            return jsonify({'error': 'Empty file provided'}), 400
+
+        logger.info(f"Processing file: {file.filename}, size: {len(pdf_bytes)} bytes")
+
         # Get parser selection from request (optional)
         parsers_to_use = request.form.get('parsers', 'all')
         if parsers_to_use == 'all':
@@ -176,7 +200,9 @@ def parse_ensemble():
             if os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
                 parsers_to_use.append('docai')
         else:
-            parsers_to_use = parsers_to_use.split(',')
+            parsers_to_use = [p.strip() for p in parsers_to_use.split(',')]
+
+        logger.info(f"Using parsers: {parsers_to_use}")
 
         coordinator = EnsembleCoordinator()
         result = coordinator.parse_with_ensemble(
@@ -185,10 +211,16 @@ def parse_ensemble():
             parsers_to_use
         )
 
+        logger.info(f"Ensemble parsing completed successfully")
         return jsonify(result)
     except Exception as e:
         logger.error(f"Ensemble parsing error: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__,
+            'parser_name': 'ensemble',
+            'success': False
+        }), 500
 
 @app.route('/parse/auto', methods=['POST'])
 def parse_auto():

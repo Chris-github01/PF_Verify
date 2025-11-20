@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: pdf-parser-ensemble
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 app:app
+    envVars:
+      - key: API_KEY
+        generateValue: true
+      - key: PORT
+        value: 5000
+      - key: PYTHON_VERSION
+        value: 3.11.0
