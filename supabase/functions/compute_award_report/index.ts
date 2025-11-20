@@ -87,8 +87,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (quotesWithItems.length === 0 || !quotesWithItems[0]) {
+      throw new Error("No quotes with items found");
+    }
+
     const baselineQuote = quotesWithItems[0];
     const comparisonData: ComparisonRow[] = [];
+
+    if (!baselineQuote.items || baselineQuote.items.length === 0) {
+      throw new Error(`Baseline quote ${baselineQuote.supplier_name} has no items`);
+    }
 
     for (const baseItem of baselineQuote.items) {
       const row: ComparisonRow = {
@@ -109,8 +117,13 @@ Deno.serve(async (req: Request) => {
 
       for (let i = 1; i < quotesWithItems.length; i++) {
         const otherQuote = quotesWithItems[i];
+        if (!otherQuote || !otherQuote.items) {
+          console.error(`Quote at index ${i} is invalid:`, otherQuote);
+          continue;
+        }
+
         const matchedItem = otherQuote.items.find(item =>
-          item.description.toLowerCase() === baseItem.description.toLowerCase()
+          item && item.description && item.description.toLowerCase() === baseItem.description.toLowerCase()
         );
 
         if (matchedItem) {
@@ -135,8 +148,15 @@ Deno.serve(async (req: Request) => {
 
     for (let i = 1; i < quotesWithItems.length; i++) {
       const otherQuote = quotesWithItems[i];
+      if (!otherQuote || !otherQuote.items) {
+        continue;
+      }
 
       for (const item of otherQuote.items) {
+        if (!item || !item.description) {
+          continue;
+        }
+
         const alreadyIncluded = comparisonData.some(row =>
           row.suppliers[otherQuote.supplier_name]?.originalDescription === item.description
         );
