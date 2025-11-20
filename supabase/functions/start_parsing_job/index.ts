@@ -120,14 +120,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get public URL for the uploaded file
-    const { data: { publicUrl } } = supabase.storage
-      .from("quote-uploads")
-      .getPublicUrl(storagePath);
-
-    const fileUrl = publicUrl;
-
-    console.log("Creating parsing job:", { projectId, supplierName, fileName, organisationId, userId: user.id });
+    console.log("Creating parsing job:", { projectId, supplierName, fileName, organisationId, userId: user.id, storagePath });
 
     const { data: job, error: jobError } = await supabase
       .from("parsing_jobs")
@@ -135,7 +128,7 @@ Deno.serve(async (req: Request) => {
         project_id: projectId,
         supplier_name: supplierName,
         file_name: fileName,
-        file_url: fileUrl,
+        file_url: storagePath,
         organisation_id: organisationId,
         user_id: user.id,
         status: "pending",
