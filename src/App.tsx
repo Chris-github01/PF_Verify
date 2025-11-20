@@ -151,6 +151,43 @@ function AppContent() {
     await loadProjectInfo(id);
   };
 
+  const handleCreateProject = async (name: string, client: string, reference: string) => {
+    if (!currentOrganisation || !session?.user) {
+      setToast({ message: 'Must be logged in to create a project', type: 'error' });
+      return null;
+    }
+
+    try {
+      const { data: project, error } = await supabase
+        .from('projects')
+        .insert({
+          organisation_id: currentOrganisation.id,
+          name,
+          client: client || null,
+          reference: reference || null,
+          status: 'active',
+          created_by_user_id: session.user.id,
+          user_id: session.user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await loadAllProjects();
+
+      setToast({ message: `Project "${name}" created successfully`, type: 'success' });
+
+      await handleProjectSelect(project.id);
+
+      return project.id;
+    } catch (error) {
+      console.error('Error creating project:', error);
+      setToast({ message: 'Failed to create project', type: 'error' });
+      return null;
+    }
+  };
+
   const loadProjectInfo = async (id: string) => {
     const { data } = await supabase
       .from('projects')
@@ -272,6 +309,7 @@ function AppContent() {
           projectName={projectInfo?.name}
           allProjects={allProjects}
           onProjectSelect={handleProjectSelect}
+          onCreateProject={handleCreateProject}
           onNavigateToQuotes={() => {
             if (handleNavigationGuard('quotes')) setActiveTab('quotes');
           }}
@@ -291,6 +329,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -317,6 +356,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -342,6 +382,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -367,6 +408,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -392,6 +434,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -413,6 +456,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -439,6 +483,7 @@ function AppContent() {
             projectName={undefined}
             allProjects={allProjects}
             onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
             onNavigateToQuotes={() => {
               if (handleNavigationGuard('quotes')) setActiveTab('quotes');
             }}
@@ -483,6 +528,7 @@ function AppContent() {
           projectName={projectInfo?.name}
           allProjects={allProjects}
           onProjectSelect={handleProjectSelect}
+          onCreateProject={handleCreateProject}
           onNavigateToQuotes={() => {
             if (handleNavigationGuard('quotes')) setActiveTab('quotes');
           }}

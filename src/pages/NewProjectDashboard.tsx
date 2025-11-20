@@ -1,4 +1,5 @@
-import { Plus, FolderOpen } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, FolderOpen, X } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 
 interface NewProjectDashboardProps {
@@ -6,6 +7,7 @@ interface NewProjectDashboardProps {
   projectName?: string;
   allProjects: any[];
   onProjectSelect: (id: string) => void;
+  onCreateProject: (name: string, client: string, reference: string) => Promise<string | null>;
   onNavigateToQuotes: () => void;
   onNavigateToMatrix: () => void;
   onNavigateToReports: () => void;
@@ -17,8 +19,39 @@ export default function NewProjectDashboard({
   projectName,
   allProjects,
   onProjectSelect,
+  onCreateProject,
   onNavigateToQuotes,
 }: NewProjectDashboardProps) {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectClient, setNewProjectClient] = useState('');
+  const [newProjectReference, setNewProjectReference] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleCreateClick = () => {
+    setShowCreateModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowCreateModal(false);
+    setNewProjectName('');
+    setNewProjectClient('');
+    setNewProjectReference('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectName.trim()) return;
+
+    setIsCreating(true);
+    const projectId = await onCreateProject(newProjectName, newProjectClient, newProjectReference);
+    setIsCreating(false);
+
+    if (projectId) {
+      handleCloseModal();
+    }
+  };
+
   return (
     <div className="p-8">
       <PageHeader
@@ -27,11 +60,15 @@ export default function NewProjectDashboard({
       />
 
       {!projectId ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-          <button className="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors">
-            <Plus className="mx-auto mb-2 text-gray-400" size={32} />
-            <div className="font-medium">Create New Project</div>
-          </button>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+            <button
+              onClick={handleCreateClick}
+              className="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+            >
+              <Plus className="mx-auto mb-2 text-gray-400" size={32} />
+              <div className="font-medium">Create New Project</div>
+            </button>
 
           {allProjects.map((project) => (
             <button
@@ -45,6 +82,89 @@ export default function NewProjectDashboard({
             </button>
           ))}
         </div>
+
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Create New Project</h2>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="projectName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Project Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="projectName"
+                      type="text"
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter project name"
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="projectClient" className="block text-sm font-medium text-gray-700 mb-1">
+                      Client Name
+                    </label>
+                    <input
+                      id="projectClient"
+                      type="text"
+                      value={newProjectClient}
+                      onChange={(e) => setNewProjectClient(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter client name"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="projectReference" className="block text-sm font-medium text-gray-700 mb-1">
+                      Project Reference
+                    </label>
+                    <input
+                      id="projectReference"
+                      type="text"
+                      value={newProjectReference}
+                      onChange={(e) => setNewProjectReference(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter project reference"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    disabled={isCreating}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    disabled={isCreating || !newProjectName.trim()}
+                  >
+                    {isCreating ? 'Creating...' : 'Create Project'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
           <button
