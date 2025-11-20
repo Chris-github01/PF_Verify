@@ -8,8 +8,20 @@ export async function analyzeQuoteIntelligenceHybrid(
   return {
     projectId,
     quoteIds,
-    summary: 'Analysis not implemented',
-    insights: [],
-    recommendations: []
+    quotesAnalyzed: 0,
+    analyzedAt: new Date().toISOString(),
+    summary: {
+      totalRedFlags: 0,
+      criticalIssues: 0,
+      coverageScore: 0,
+      averageQualityScore: 0,
+      bestValueSupplier: 'N/A',
+      mostCompleteSupplier: 'N/A'
+    },
+    redFlags: [],
+    coverageGaps: [],
+    systemsDetected: [],
+    supplierInsights: [],
+    normalizedItems: []
   };
 }
