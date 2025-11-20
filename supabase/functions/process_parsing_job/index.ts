@@ -335,17 +335,26 @@ Deno.serve(async (req: Request) => {
             const parseResult = await llmRes.json();
             const chunkItems = parseResult.lines || parseResult.items || [];
 
+            // Renumber items with global line numbers to prevent deduplication issues
+            // Each chunk's LLM starts from lineNumber 1, so we need to make them globally unique
+            const globalLineOffset = allItems.length;
+            const renumberedItems = chunkItems.map((item: any, idx: number) => ({
+              ...item,
+              lineNumber: globalLineOffset + idx + 1,
+              originalChunkNumber: chunkNum
+            }));
+
             await supabase
               .from("parsing_chunks")
               .update({
                 status: 'completed',
-                parsed_items: chunkItems
+                parsed_items: renumberedItems
               })
               .eq("job_id", jobId)
               .eq("chunk_number", chunkNum);
 
-            allItems.push(...chunkItems);
-            console.log(`Chunk ${chunkNum} completed: ${chunkItems.length} items (total so far: ${allItems.length})`);
+            allItems.push(...renumberedItems);
+            console.log(`Chunk ${chunkNum} completed: ${chunkItems.length} items (renumbered ${globalLineOffset + 1} to ${allItems.length}), total so far: ${allItems.length}`);
             success = true;
           } catch (jsonError) {
             lastError = `JSON parse error: ${jsonError.message}`;
