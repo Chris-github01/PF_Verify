@@ -16,7 +16,7 @@ interface Project {
 
 interface ReportsHubProps {
   projects: Project[];
-  onNavigate?: (path: 'award-report' | 'equalisation' | 'trade-analysis') => void;
+  onNavigate?: (path: 'award-report' | 'equalisation' | 'trade-analysis', reportId?: string) => void;
 }
 
 export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
@@ -35,7 +35,7 @@ export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
 
   const handleViewReport = () => {
     if (selectedProject?.report_id) {
-      onNavigate?.('award-report');
+      onNavigate?.('award-report', selectedProject.report_id);
     }
   };
 
@@ -90,7 +90,7 @@ export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
         report_coverage_percent: Math.round(coveragePercent),
       });
 
-      onNavigate?.('award-report');
+      onNavigate?.('award-report', result.reportId);
     } catch (error: any) {
       console.error('Error computing award report:', error);
       setError(error.message || 'Failed to compute award report');

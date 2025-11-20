@@ -892,6 +892,107 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
               </div>
             </div>
 
+            {comparisonData.length > 0 && (
+              <div className="mb-8 print:mb-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Itemized Comparison</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Line-by-line comparison of all items across {awardSummary.suppliers.length} suppliers
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700 border border-gray-300 sticky left-0 bg-gray-50 z-10">
+                          Item Description
+                        </th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 border border-gray-300">
+                          Qty
+                        </th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 border border-gray-300">
+                          Unit
+                        </th>
+                        {awardSummary.suppliers.map((supplier, idx) => (
+                          <th key={idx} colSpan={2} className="px-3 py-2 text-center font-semibold text-gray-700 border border-gray-300 bg-blue-50">
+                            {supplier.supplierName}
+                          </th>
+                        ))}
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <th className="px-3 py-2 border border-gray-300 sticky left-0 bg-gray-50 z-10"></th>
+                        <th className="px-3 py-2 border border-gray-300"></th>
+                        <th className="px-3 py-2 border border-gray-300"></th>
+                        {awardSummary.suppliers.map((_, idx) => (
+                          <>
+                            <th key={`${idx}-rate`} className="px-3 py-2 text-center text-xs font-medium text-gray-600 border border-gray-300 bg-blue-50">
+                              Unit Rate
+                            </th>
+                            <th key={`${idx}-total`} className="px-3 py-2 text-center text-xs font-medium text-gray-600 border border-gray-300 bg-blue-50">
+                              Total
+                            </th>
+                          </>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparisonData.map((row, idx) => {
+                        const isUnmatched = row.matchStatus === 'unmatched';
+                        return (
+                          <tr key={idx} className={`hover:bg-gray-50 ${isUnmatched ? 'bg-amber-50' : ''}`}>
+                            <td className="px-3 py-2 text-gray-900 border border-gray-300 sticky left-0 bg-white z-10">
+                              <div className="font-medium">{row.description}</div>
+                              {row.notes && (
+                                <div className="text-xs text-amber-600 mt-1">{row.notes}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-center text-gray-700 border border-gray-300">
+                              {row.quantity}
+                            </td>
+                            <td className="px-3 py-2 text-center text-gray-700 border border-gray-300">
+                              {row.unit}
+                            </td>
+                            {awardSummary.suppliers.map((supplier, supplierIdx) => {
+                              const supplierData = row.suppliers[supplier.supplierName];
+                              const hasData = supplierData && supplierData.unitPrice !== null;
+
+                              return (
+                                <>
+                                  <td key={`${supplierIdx}-rate`} className={`px-3 py-2 text-right border border-gray-300 ${
+                                    !hasData ? 'bg-gray-100 text-gray-400' : ''
+                                  }`}>
+                                    {hasData ? `$${supplierData.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                                  </td>
+                                  <td key={`${supplierIdx}-total`} className={`px-3 py-2 text-right font-medium border border-gray-300 ${
+                                    !hasData ? 'bg-gray-100 text-gray-400' : ''
+                                  }`}>
+                                    {hasData ? `$${supplierData.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                                  </td>
+                                </>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-50">
+                      <tr className="font-bold">
+                        <td colSpan={3} className="px-3 py-3 text-right text-gray-900 border border-gray-300">
+                          Subtotals:
+                        </td>
+                        {awardSummary.suppliers.map((supplier, idx) => (
+                          <>
+                            <td key={`${idx}-spacer`} className="border border-gray-300"></td>
+                            <td key={`${idx}-total`} className="px-3 py-3 text-right text-gray-900 border border-gray-300">
+                              ${supplier.adjustedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </>
+                        ))}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
             <div className="border-t border-gray-200 pt-6">
               <h2 className="text-lg font-bold text-gray-900 mb-3">Risk Scoring Methodology</h2>
               <div className="text-xs text-gray-600 space-y-1">

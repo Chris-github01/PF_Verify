@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import ReportsHub from './ReportsHub';
+import AwardReport from './AwardReport';
 
 interface EnhancedReportsHubProps {
   projectId: string;
@@ -8,5 +10,35 @@ interface EnhancedReportsHubProps {
 }
 
 export default function EnhancedReportsHub(props: EnhancedReportsHubProps) {
-  return <ReportsHub {...props} />;
+  const [view, setView] = useState<'hub' | 'award-report' | 'equalisation' | 'trade-analysis'>('hub');
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+
+  const handleNavigate = (path: 'award-report' | 'equalisation' | 'trade-analysis', reportId?: string) => {
+    if (reportId) {
+      setSelectedReportId(reportId);
+    }
+    setView(path);
+  };
+
+  const handleBackToHub = () => {
+    setView('hub');
+    setSelectedReportId(null);
+  };
+
+  if (view === 'award-report') {
+    return (
+      <AwardReport
+        projectId={props.projectId}
+        reportId={selectedReportId || undefined}
+        onNavigate={handleBackToHub}
+      />
+    );
+  }
+
+  return (
+    <ReportsHub
+      {...props}
+      onNavigate={(path) => handleNavigate(path)}
+    />
+  );
 }
