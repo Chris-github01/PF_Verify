@@ -67,10 +67,39 @@ Deno.serve(async (req: Request) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Python parser service error (${response.status}): ${errorText}`);
+      console.error(`Python parser service error (${response.status}):`, errorText);
+
+      return new Response(
+        JSON.stringify({
+          error: "Python parser service unavailable",
+          status: response.status,
+          message: "The Python parser service is not responding. Please ensure it's deployed and the URL is configured correctly.",
+          instructions: [
+            "1. Deploy the Python service from python-pdf-service/ folder",
+            "2. Add PYTHON_PARSER_SERVICE_URL environment variable to edge functions",
+            "3. Add PYTHON_PARSER_API_KEY to system_config table"
+          ]
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const ensembleResult = await response.json();
+    let ensembleResult;
+    try {
+      ensembleResult = await response.json();
+    } catch (jsonError) {
+      const responseText = await response.text();
+      console.error("Failed to parse JSON response:", responseText);
+
+      return new Response(
+        JSON.stringify({
+          error: "Invalid response from Python parser service",
+          details: "Service returned non-JSON response. Check Python service logs.",
+          responsePreview: responseText.substring(0, 200)
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     console.log(
       `Ensemble parsing complete: ${ensembleResult.confidence_breakdown.parsers_succeeded}/${ensembleResult.confidence_breakdown.parsers_attempted} parsers succeeded, ` +
