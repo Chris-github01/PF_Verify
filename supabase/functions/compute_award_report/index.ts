@@ -221,10 +221,39 @@ Deno.serve(async (req: Request) => {
       };
     });
 
+    const sortedByPrice = [...suppliers].sort((a, b) => a.adjustedTotal - b.adjustedTotal);
+    const sortedByRisk = [...suppliers].sort((a, b) => a.riskScore - b.riskScore);
+    const sortedByCoverage = [...suppliers].sort((a, b) => b.coveragePercent - a.coveragePercent);
+
+    const recommendations = [
+      {
+        type: "BEST_VALUE",
+        supplierId: sortedByPrice[0].supplierId,
+        supplierName: sortedByPrice[0].supplierName,
+        reason: `Lowest total price at $${sortedByPrice[0].adjustedTotal.toLocaleString()}`,
+        confidence: 85,
+      },
+      {
+        type: "LOWEST_RISK",
+        supplierId: sortedByRisk[0].supplierId,
+        supplierName: sortedByRisk[0].supplierName,
+        reason: `Best scope coverage at ${sortedByRisk[0].coveragePercent.toFixed(1)}%`,
+        confidence: 80,
+      },
+      {
+        type: "BALANCED",
+        supplierId: sortedByCoverage[0].supplierId,
+        supplierName: sortedByCoverage[0].supplierName,
+        reason: `Good balance of price and coverage`,
+        confidence: 75,
+      },
+    ];
+
     const awardSummary = {
       suppliers,
       totalSystems: comparisonData.length,
       equalisationMode: "MODEL",
+      recommendations,
     };
 
     const resultJson = {
