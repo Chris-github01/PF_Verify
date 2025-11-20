@@ -8,8 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const PDF_EXTRACTOR_BASE_URL = Deno.env.get("PDF_EXTRACTOR_BASE_URL") || "https://verify-pdf-extractor.onrender.com";
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -76,23 +74,26 @@ Deno.serve(async (req: Request) => {
       throw new Error("Project not found");
     }
 
-    const { data: apiKeyConfig } = await supabaseAdmin
+    const { data: configs } = await supabaseAdmin
       .from("system_config")
-      .select("value")
-      .eq("key", "RENDER_PDF_EXTRACTOR_API_KEY")
-      .maybeSingle();
+      .select("key, value")
+      .in("key", ["RENDER_PDF_EXTRACTOR_API_KEY", "RENDER_PDF_EXTRACTOR_URL"]);
 
-    const apiKey = apiKeyConfig?.value;
+    const configMap = new Map(configs?.map(c => [c.key, c.value]) || []);
+    const apiKey = configMap.get("RENDER_PDF_EXTRACTOR_API_KEY");
+    const baseUrl = configMap.get("RENDER_PDF_EXTRACTOR_URL") || "https://verify-pdf-extractor.onrender.com";
+
     if (!apiKey) {
       throw new Error("PDF Extractor API key not configured in system settings");
     }
 
     console.log("Calling external PDF extractor for:", file.name);
+    console.log("Using base URL:", baseUrl);
 
     const extractorFormData = new FormData();
     extractorFormData.append("file", file);
 
-    const extractorResponse = await fetch(`${PDF_EXTRACTOR_BASE_URL}/parse/ensemble`, {
+    const extractorResponse = await fetch(`${baseUrl}/parse/ensemble`, {
       method: "POST",
       headers: {
         "X-API-Key": apiKey,
