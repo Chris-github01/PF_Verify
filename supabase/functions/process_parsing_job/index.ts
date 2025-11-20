@@ -275,6 +275,8 @@ Deno.serve(async (req: Request) => {
       };
 
       const allItems: any[] = [];
+      const failedChunks: number[] = [];
+      const MAX_RETRIES = 2;
 
       for (let i = 0; i < chunks.length; i++) {
         const chunkNum = i + 1;
@@ -288,72 +290,81 @@ Deno.serve(async (req: Request) => {
 
         const chunkText = `${chunks[i]}\n\nSupplier: ${typedJob.supplier_name}\nDocument: ${typedJob.file_name}\nChunk ${chunkNum} of ${totalChunks}`;
 
-        const timeoutMs = 180000; // 3 minutes for large documents
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        let success = false;
+        let lastError = '';
 
-        let llmRes;
-        try {
-          llmRes = await fetch(llmUrl, {
-            method: "POST",
-            headers: llmHeaders,
-            body: JSON.stringify({
-              text: chunkText,
-              supplierName: typedJob.supplier_name,
-              documentType: fileName.endsWith(".pdf") ? "PDF Quote" : "Excel Quote",
-              chunkInfo: `Chunk ${chunkNum}/${totalChunks}`
-            }),
-            signal: controller.signal,
-          });
-        } catch (fetchError) {
+        for (let attempt = 0; attempt < MAX_RETRIES && !success; attempt++) {
+          if (attempt > 0) {
+            console.log(`Retrying chunk ${chunkNum} (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          }
+
+          const timeoutMs = 300000; // 5 minutes for large documents
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+          let llmRes;
+          try {
+            llmRes = await fetch(llmUrl, {
+              method: "POST",
+              headers: llmHeaders,
+              body: JSON.stringify({
+                text: chunkText,
+                supplierName: typedJob.supplier_name,
+                documentType: fileName.endsWith(".pdf") ? "PDF Quote" : "Excel Quote",
+                chunkInfo: `Chunk ${chunkNum}/${totalChunks}`
+              }),
+              signal: controller.signal,
+            });
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            lastError = fetchError.name === 'AbortError' ? 'Request timeout (300s)' : fetchError.message;
+            console.error(`Chunk ${chunkNum} fetch failed (attempt ${attempt + 1}):`, lastError);
+            continue;
+          }
+
           clearTimeout(timeoutId);
-          const errorMsg = fetchError.name === 'AbortError' ? 'Request timeout (180s)' : fetchError.message;
-          console.error(`Chunk ${chunkNum} fetch failed:`, errorMsg);
 
+          if (!llmRes.ok) {
+            lastError = await llmRes.text();
+            console.error(`Chunk ${chunkNum} parsing failed (attempt ${attempt + 1}):`, lastError);
+            continue;
+          }
+
+          try {
+            const parseResult = await llmRes.json();
+            const chunkItems = parseResult.lines || parseResult.items || [];
+
+            await supabase
+              .from("parsing_chunks")
+              .update({
+                status: 'completed',
+                parsed_items: chunkItems
+              })
+              .eq("job_id", jobId)
+              .eq("chunk_number", chunkNum);
+
+            allItems.push(...chunkItems);
+            console.log(`Chunk ${chunkNum} completed: ${chunkItems.length} items (total so far: ${allItems.length})`);
+            success = true;
+          } catch (jsonError) {
+            lastError = `JSON parse error: ${jsonError.message}`;
+            console.error(`Chunk ${chunkNum} JSON parsing failed:`, lastError);
+          }
+        }
+
+        if (!success) {
+          console.error(`Chunk ${chunkNum} failed after ${MAX_RETRIES} attempts`);
+          failedChunks.push(chunkNum);
           await supabase
             .from("parsing_chunks")
             .update({
               status: 'failed',
-              error_message: errorMsg
+              error_message: lastError
             })
             .eq("job_id", jobId)
             .eq("chunk_number", chunkNum);
-
-          continue;
         }
-
-        clearTimeout(timeoutId);
-
-        if (!llmRes.ok) {
-          const errorText = await llmRes.text();
-          console.error(`Chunk ${chunkNum} parsing failed:`, errorText);
-
-          await supabase
-            .from("parsing_chunks")
-            .update({
-              status: 'failed',
-              error_message: errorText
-            })
-            .eq("job_id", jobId)
-            .eq("chunk_number", chunkNum);
-
-          continue;
-        }
-
-        const parseResult = await llmRes.json();
-        const chunkItems = parseResult.lines || parseResult.items || [];
-
-        await supabase
-          .from("parsing_chunks")
-          .update({
-            status: 'completed',
-            parsed_items: chunkItems
-          })
-          .eq("job_id", jobId)
-          .eq("chunk_number", chunkNum);
-
-        allItems.push(...chunkItems);
-        console.log(`Chunk ${chunkNum} completed: ${chunkItems.length} items (total so far: ${allItems.length})`);
 
         const progress = 50 + Math.floor((chunkNum / totalChunks) * 30);
         await supabase
@@ -363,6 +374,10 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", jobId);
+      }
+
+      if (failedChunks.length > 0) {
+        console.log(`Warning: ${failedChunks.length} chunks failed: ${failedChunks.join(', ')}`);
       }
 
       const uniqueItems = new Map();
