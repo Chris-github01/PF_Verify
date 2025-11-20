@@ -380,16 +380,34 @@ Deno.serve(async (req: Request) => {
         console.log(`Warning: ${failedChunks.length} chunks failed: ${failedChunks.join(', ')}`);
       }
 
-      const uniqueItems = new Map();
+      // Only remove exact duplicates that appear multiple times (likely parsing errors)
+      // Keep legitimate items that have the same values but are different line items
+      const itemCounts = new Map();
       allItems.forEach(item => {
-        const key = `${item.description}_${item.qty}_${item.rate}_${item.total}`;
-        if (!uniqueItems.has(key)) {
-          uniqueItems.set(key, item);
-        }
+        const key = `${item.description}_${item.qty}_${item.rate}_${item.total}_${item.unit || ''}`;
+        itemCounts.set(key, (itemCounts.get(key) || 0) + 1);
       });
 
-      parsedLines = Array.from(uniqueItems.values());
-      console.log(`All chunks processed. Total items before dedup: ${allItems.length}, after dedup: ${parsedLines.length}`);
+      // Only keep items that appear once, or if they appear multiple times, keep just one
+      const seenKeys = new Set();
+      parsedLines = allItems.filter(item => {
+        const key = `${item.description}_${item.qty}_${item.rate}_${item.total}_${item.unit || ''}`;
+        const count = itemCounts.get(key);
+
+        // If this exact item appears more than 3 times, it's likely a parsing duplicate
+        if (count > 3) {
+          if (seenKeys.has(key)) {
+            return false; // Skip duplicate
+          }
+          seenKeys.add(key);
+          return true; // Keep first occurrence
+        }
+
+        // Otherwise keep all items (legitimate duplicates)
+        return true;
+      });
+
+      console.log(`All chunks processed. Total items: ${allItems.length}, after smart dedup: ${parsedLines.length} (removed ${allItems.length - parsedLines.length} likely parsing errors)`);
 
       await supabase
         .from("parsing_jobs")
