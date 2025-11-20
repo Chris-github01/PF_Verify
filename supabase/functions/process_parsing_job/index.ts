@@ -380,34 +380,25 @@ Deno.serve(async (req: Request) => {
         console.log(`Warning: ${failedChunks.length} chunks failed: ${failedChunks.join(', ')}`);
       }
 
-      // Only remove exact duplicates that appear multiple times (likely parsing errors)
-      // Keep legitimate items that have the same values but are different line items
-      const itemCounts = new Map();
-      allItems.forEach(item => {
-        const key = `${item.description}_${item.qty}_${item.rate}_${item.total}_${item.unit || ''}`;
-        itemCounts.set(key, (itemCounts.get(key) || 0) + 1);
-      });
+      // Only remove items with duplicate line numbers (same item extracted from overlapping chunks)
+      // Each chunk's LLM assigns line numbers starting from 1, so duplicates will have same lineNumber
+      const seenLineNumbers = new Map();
 
-      // Only keep items that appear once, or if they appear multiple times, keep just one
-      const seenKeys = new Set();
       parsedLines = allItems.filter(item => {
-        const key = `${item.description}_${item.qty}_${item.rate}_${item.total}_${item.unit || ''}`;
-        const count = itemCounts.get(key);
+        // Create a unique key using lineNumber + description + values
+        // This ensures we keep items with same lineNumber but different content
+        const key = `${item.lineNumber || 'unknown'}_${item.description}_${item.qty}_${item.total}`;
 
-        // If this exact item appears more than 3 times, it's likely a parsing duplicate
-        if (count > 3) {
-          if (seenKeys.has(key)) {
-            return false; // Skip duplicate
-          }
-          seenKeys.add(key);
-          return true; // Keep first occurrence
+        if (seenLineNumbers.has(key)) {
+          console.log(`[Dedup] Skipping duplicate line ${item.lineNumber}: "${item.description}"`);
+          return false; // Skip this duplicate
         }
 
-        // Otherwise keep all items (legitimate duplicates)
-        return true;
+        seenLineNumbers.set(key, item);
+        return true; // Keep this item
       });
 
-      console.log(`All chunks processed. Total items: ${allItems.length}, after smart dedup: ${parsedLines.length} (removed ${allItems.length - parsedLines.length} likely parsing errors)`);
+      console.log(`All chunks processed. Total items: ${allItems.length}, after line-number dedup: ${parsedLines.length} (removed ${allItems.length - parsedLines.length} duplicates)`);
 
       await supabase
         .from("parsing_jobs")

@@ -275,27 +275,16 @@ Return JSON with all items found.`;
 
     console.log(`[LLM Fallback] After filtering: ${filteredItems.length} items (excluded ${rawItems.length - filteredItems.length})`);
 
-    const seen = new Set<string>();
-    const dedupedItems = filteredItems.filter(item => {
-      const key = [
-        (item.description || '').trim().toLowerCase(),
-        (item.qty || 0).toString(),
-        (item.rate || 0).toString(),
-        (item.unit || '').trim().toLowerCase(),
-      ].join('|');
+    // Add line numbers to each item for tracking
+    const itemsWithLineNumbers = filteredItems.map((item, index) => ({
+      ...item,
+      lineNumber: index + 1
+    }));
 
-      if (seen.has(key)) {
-        console.log(`[Filter] Excluding duplicate: "${item.description}"`);
-        return false;
-      }
-      seen.add(key);
-      return true;
-    });
-
-    console.log(`[LLM Fallback] After deduplication: ${dedupedItems.length} items`);
+    console.log(`[LLM Fallback] Added line numbers to ${itemsWithLineNumbers.length} items`);
 
     // Fix quantities and rates
-    const fixedItems = dedupedItems.map(item => {
+    const fixedItems = itemsWithLineNumbers.map(item => {
       let qty = item.qty || 1;
       const total = item.total || 0;
       let rate = item.rate || 0;
