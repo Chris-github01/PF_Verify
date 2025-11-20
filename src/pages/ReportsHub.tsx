@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, FileText, Calendar, User, Building2, Hash, TrendingUp, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer, Table as TableIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -72,10 +72,22 @@ export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
         throw new Error('No report ID returned from server');
       }
 
+      const { data: updatedReport } = await supabase
+        .from('award_reports')
+        .select('id, generated_at, result_json')
+        .eq('id', result.reportId)
+        .single();
+
+      const quotesCount = updatedReport?.result_json?.awardSummary?.suppliers?.length || 0;
+      const coveragePercent = updatedReport?.result_json?.awardSummary?.suppliers?.[0]?.coveragePercent || 0;
+
       setSelectedProject({
         ...selectedProject,
         has_report: true,
         report_id: result.reportId,
+        report_generated_at: updatedReport?.generated_at,
+        report_quotes_count: quotesCount,
+        report_coverage_percent: Math.round(coveragePercent),
       });
 
       onNavigate?.('award-report');
@@ -94,6 +106,38 @@ export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
   const handleRegenerateReport = () => {
     computeAwardReport(true);
   };
+
+  const refreshProjectMetadata = async () => {
+    if (!selectedProject?.report_id) return;
+
+    try {
+      const { data: updatedReport } = await supabase
+        .from('award_reports')
+        .select('id, generated_at, result_json')
+        .eq('id', selectedProject.report_id)
+        .single();
+
+      if (updatedReport) {
+        const quotesCount = updatedReport.result_json?.awardSummary?.suppliers?.length || 0;
+        const coveragePercent = updatedReport.result_json?.awardSummary?.suppliers?.[0]?.coveragePercent || 0;
+
+        setSelectedProject({
+          ...selectedProject,
+          report_generated_at: updatedReport.generated_at,
+          report_quotes_count: quotesCount,
+          report_coverage_percent: Math.round(coveragePercent),
+        });
+      }
+    } catch (error) {
+      console.error('Error refreshing project metadata:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProject?.has_report && selectedProject.report_id) {
+      refreshProjectMetadata();
+    }
+  }, [selectedProject?.id]);
 
   const handleExportPDF = async () => {
     if (!selectedProject?.report_id) return;
