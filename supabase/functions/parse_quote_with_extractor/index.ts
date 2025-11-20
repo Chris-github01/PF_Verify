@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
     const extractorFormData = new FormData();
     extractorFormData.append("file", file);
 
-    const extractorResponse = await fetch(`${PDF_EXTRACTOR_BASE_URL}/extract-quote`, {
+    const extractorResponse = await fetch(`${PDF_EXTRACTOR_BASE_URL}/parse/ensemble`, {
       method: "POST",
       headers: {
         "X-API-Key": apiKey,
