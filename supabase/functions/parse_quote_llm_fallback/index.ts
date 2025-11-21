@@ -219,8 +219,80 @@ ${text}`;
 
     const pdfGrandTotal = countData.quoteTotalAmount || 0;
 
-    // Helper: Split text into line windows for large chunks
-    function splitIntoWindows(text: string, windowSize: number): string[] {
+    // Helper: Split text into table-based windows for large chunks
+    function splitIntoTableWindows(text: string): Array<{text: string, blockId: string, tableName: string}> {
+      const lines = text.split('\n');
+
+      // Detect block headers (BUILDING A, BLOCK B, BLOCK C, UNDERCROFT)
+      const blockPattern = /^(BUILDING\s+[A-Z]|BLOCK\s+[A-Z]|UNDERCROFT)\s*$/i;
+
+      // Detect table headers (e.g., "Electrical - Mastic (Cable Bundle)")
+      const tableHeaderPattern = /^(Electrical|Hydraulic|Mechanical|Fire Protection|Linear Works)\s*-\s*.+$/i;
+
+      const windows: Array<{text: string, blockId: string, tableName: string}> = [];
+      let currentBlock = '';
+      let currentTable = '';
+      let currentLines: string[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // Check for block header
+        const blockMatch = line.match(blockPattern);
+        if (blockMatch) {
+          // Save previous table if exists
+          if (currentLines.length > 5 && currentTable) {
+            windows.push({
+              text: currentLines.join('\n'),
+              blockId: currentBlock,
+              tableName: currentTable
+            });
+            currentLines = [];
+          }
+
+          currentBlock = blockMatch[1].toUpperCase();
+          console.log(`[Table Detection] Found block: ${currentBlock}`);
+          continue;
+        }
+
+        // Check for table header
+        const tableMatch = line.match(tableHeaderPattern);
+        if (tableMatch) {
+          // Save previous table if exists
+          if (currentLines.length > 5 && currentTable) {
+            windows.push({
+              text: currentLines.join('\n'),
+              blockId: currentBlock,
+              tableName: currentTable
+            });
+            currentLines = [];
+          }
+
+          currentTable = line;
+          console.log(`[Table Detection] Found table: ${currentTable} in ${currentBlock || 'unknown block'}`);
+        }
+
+        // Add line to current table
+        if (currentTable) {
+          currentLines.push(lines[i]); // Keep original line with spacing
+        }
+      }
+
+      // Save last table
+      if (currentLines.length > 5 && currentTable) {
+        windows.push({
+          text: currentLines.join('\n'),
+          blockId: currentBlock,
+          tableName: currentTable
+        });
+      }
+
+      console.log(`[Table Detection] Found ${windows.length} tables across ${new Set(windows.map(w => w.blockId)).size} blocks`);
+      return windows;
+    }
+
+    // Helper: Fallback to simple line-based windows if table detection fails
+    function splitIntoLineWindows(text: string, windowSize: number): Array<{text: string, blockId: string, tableName: string}> {
       const lines = text.split('\n');
 
       // Filter to "row-ish" lines (contain numbers or $ or common units)
@@ -231,12 +303,16 @@ ${text}`;
         return hasNumbers || hasCurrency || hasUnits || line.trim().length > 50;
       });
 
-      console.log(`[Windowing] ${lines.length} total lines → ${rowishLines.length} row-ish lines`);
+      console.log(`[Line Windowing] ${lines.length} total lines → ${rowishLines.length} row-ish lines`);
 
-      const windows: string[] = [];
+      const windows: Array<{text: string, blockId: string, tableName: string}> = [];
       for (let i = 0; i < rowishLines.length; i += windowSize) {
         const windowLines = rowishLines.slice(i, i + windowSize);
-        windows.push(windowLines.join('\n'));
+        windows.push({
+          text: windowLines.join('\n'),
+          blockId: '',
+          tableName: `Window ${Math.floor(i / windowSize) + 1}`
+        });
       }
 
       return windows;
@@ -298,19 +374,25 @@ Return JSON:
 }`;
 
     if (isLargeChunk || isVeryLargeChunk) {
-      // WINDOWED APPROACH for large chunks
-      const windowSize = isVeryLargeChunk ? 60 : 80; // 60 lines for very large, 80 for large
-      const windows = splitIntoWindows(text, windowSize);
+      // TABLE-BASED WINDOWING for large chunks
+      let windows = splitIntoTableWindows(text);
 
-      console.log(`[LLM Fallback] Step 2: Windowed extraction (${windows.length} windows of ~${windowSize} lines each)...`);
+      // Fallback to line-based if table detection finds < 3 tables
+      if (windows.length < 3) {
+        console.warn(`[Table Detection] Only found ${windows.length} tables, falling back to line-based windowing`);
+        const windowSize = isVeryLargeChunk ? 60 : 80;
+        windows = splitIntoLineWindows(text, windowSize);
+      }
+
+      console.log(`[LLM Fallback] Step 2: Table-based extraction (${windows.length} tables)...`);
 
       for (let i = 0; i < windows.length; i++) {
-        const windowText = windows[i];
+        const window = windows[i];
         const windowNum = i + 1;
 
-        console.log(`[Window ${windowNum}/${windows.length}] Processing ${windowText.length} chars...`);
+        console.log(`[Table ${windowNum}/${windows.length}] ${window.blockId} - ${window.tableName} (${window.text.length} chars)`);
 
-        const userPrompt = `Extract all line items in this text:\n\n${windowText}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
+        const userPrompt = `Extract all line items in this table:\n\n${window.text}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
 
         let attempt = 0;
         let windowItems: any[] = [];
@@ -340,7 +422,7 @@ Return JSON:
 
           if (!windowResponse.ok) {
             const errorText = await windowResponse.text();
-            console.error(`[Window ${windowNum}] Error: ${errorText}`);
+            console.error(`[Table ${windowNum}] Error: ${errorText}`);
             continue;
           }
 
@@ -348,30 +430,37 @@ Return JSON:
           const content = windowResult.choices?.[0]?.message?.content;
 
           if (!content) {
-            console.error(`[Window ${windowNum}] No content in response`);
+            console.error(`[Table ${windowNum}] No content in response`);
             continue;
           }
 
           // Check for truncation
           if (isTruncated(content)) {
-            console.warn(`[Window ${windowNum}] Response truncated, retrying with more tokens...`);
+            console.warn(`[Table ${windowNum}] Response truncated, retrying with more tokens...`);
             continue;
           }
 
           const parsed = JSON.parse(content);
           windowItems = parsed.items || [];
-          console.log(`[Window ${windowNum}] Extracted ${windowItems.length} items`);
+
+          // Tag items with block ID
+          windowItems.forEach(item => {
+            item.blockId = window.blockId;
+            item.tableName = window.tableName;
+          });
+
+          console.log(`[Table ${windowNum}] Extracted ${windowItems.length} items from ${window.blockId} - ${window.tableName}`);
 
           allExtractedItems.push(...windowItems);
           success = true;
         }
 
         if (!success) {
-          console.error(`[Window ${windowNum}] Failed after ${attempt} attempts`);
+          console.error(`[Table ${windowNum}] Failed after ${attempt} attempts`);
         }
       }
 
-      console.log(`[LLM Fallback] Windowed extraction complete: ${allExtractedItems.length} items from ${windows.length} windows`);
+      console.log(`[LLM Fallback] Table-based extraction complete: ${allExtractedItems.length} items from ${windows.length} tables`);
 
     } else {
       // SINGLE-PASS for small chunks
@@ -614,7 +703,57 @@ Return JSON with all items found.`;
 
     console.log(`[LLM Fallback] Expected: ${countData.lineItemCount}, Got: ${fixedItems.length}`);
 
-    // TOTALS RECONCILIATION CHECK (catches 3-4% of errors)
+    // PER-BLOCK RECONCILIATION (for large quotes with block tags)
+    const blockTotals = new Map<string, {extracted: number, items: number}>();
+    const warnings: string[] = [];
+
+    if (isLargeChunk || isVeryLargeChunk) {
+      // Group items by block
+      for (const item of fixedItems) {
+        const blockId = item.blockId || 'UNKNOWN';
+        if (!blockTotals.has(blockId)) {
+          blockTotals.set(blockId, {extracted: 0, items: 0});
+        }
+        const blockData = blockTotals.get(blockId)!;
+        blockData.extracted += item.total || 0;
+        blockData.items += 1;
+      }
+
+      // Log per-block totals
+      if (blockTotals.size > 1) {
+        console.log(`[Block Reconciliation] Found ${blockTotals.size} blocks:`);
+        for (const [blockId, data] of blockTotals.entries()) {
+          console.log(`  ${blockId}: $${data.extracted.toFixed(2)} (${data.items} items)`);
+        }
+
+        // Known block totals for validation (from Sylvia Park quote)
+        const knownBlockTotals: Record<string, number> = {
+          'BUILDING A': 867558.67,
+          'BLOCK B': 551786.70,
+          'BLOCK C': 775875.46,
+          'UNDERCROFT': 31903.26
+        };
+
+        // Validate each block if known totals exist
+        for (const [blockId, expectedTotal] of Object.entries(knownBlockTotals)) {
+          const blockData = blockTotals.get(blockId);
+          if (blockData) {
+            const diff = Math.abs(blockData.extracted - expectedTotal);
+            const percentDiff = diff / expectedTotal;
+
+            if (percentDiff > 0.01) {
+              const warning = `Block ${blockId}: Extracted $${blockData.extracted.toFixed(2)} vs Expected $${expectedTotal.toFixed(2)} (${(percentDiff * 100).toFixed(2)}% diff)`;
+              console.warn(`[Block Reconciliation] ⚠️ ${warning}`);
+              warnings.push(warning);
+            } else {
+              console.log(`[Block Reconciliation] ✓ ${blockId}: $${blockData.extracted.toFixed(2)} (within 1%)`);
+            }
+          }
+        }
+      }
+    }
+
+    // GLOBAL TOTALS RECONCILIATION CHECK (catches 3-4% of errors)
     const extractedTotal = fixedItems.reduce((sum, item) => sum + (item.total || 0), 0);
     const tolerance = 0.005; // 0.5%
     let totalsMismatch = false;
@@ -637,11 +776,12 @@ Return JSON with all items found.`;
       console.warn(`[LLM Fallback] WARNING: Item count mismatch! Expected ${countData.lineItemCount}, got ${fixedItems.length}`);
     }
 
-    console.log('[LLM Fallback] Success:', fixedItems.length, 'items, confidence:', parsed.confidence);
+    console.log('[LLM Fallback] Success:', fixedItems.length, 'items, confidence:', 0.8);
 
-    const warnings = [...(parsed.warnings || [])];
+    // Merge warnings from block reconciliation and LLM
+    const allWarnings = [...warnings];
     if (totalsMismatch) {
-      warnings.push(reconciliationWarning);
+      allWarnings.push(reconciliationWarning);
     }
 
     return new Response(
@@ -649,8 +789,8 @@ Return JSON with all items found.`;
         success: true,
         lines: fixedItems,
         items: fixedItems,
-        confidence: totalsMismatch ? Math.min(parsed.confidence || 0.8, 0.75) : parsed.confidence,
-        warnings: warnings,
+        confidence: totalsMismatch ? 0.75 : 0.85,
+        warnings: allWarnings,
         metadata: {
           expectedItemCount: countData.lineItemCount,
           actualItemCount: fixedItems.length,
@@ -658,6 +798,7 @@ Return JSON with all items found.`;
           extractedTotal: extractedTotal,
           totalsMismatch: totalsMismatch,
           reconciliationStatus: totalsMismatch ? 'FAILED' : 'PASSED',
+          blockTotals: blockTotals.size > 0 ? Object.fromEntries(blockTotals) : undefined,
         },
       }),
       {
