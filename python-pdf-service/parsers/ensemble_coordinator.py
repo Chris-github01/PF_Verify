@@ -7,6 +7,7 @@ from .pymupdf_parser import PyMuPDFParser
 from .ocr_parser import OCRParser
 from .textract_parser import TextractParser
 from .docai_parser import DocAIParser
+from .unstructured_parser import parse_with_unstructured, extract_line_items_from_tables
 
 
 class EnsembleCoordinator:
@@ -23,6 +24,8 @@ class EnsembleCoordinator:
             'textract': TextractParser(),
             'docai': DocAIParser(),
         }
+        # Unstructured is handled separately (function-based, not class-based)
+        self.unstructured_available = True
 
     def parse_with_ensemble(
         self,
@@ -41,7 +44,11 @@ class EnsembleCoordinator:
             future_to_parser = {}
 
             for parser_name in parsers_to_use:
-                if parser_name in self.parsers:
+                if parser_name == 'unstructured' and self.unstructured_available:
+                    # Unstructured uses different API
+                    future = executor.submit(self._parse_with_unstructured_wrapper, pdf_bytes, filename)
+                    future_to_parser[future] = parser_name
+                elif parser_name in self.parsers:
                     parser = self.parsers[parser_name]
                     future = executor.submit(parser.parse, pdf_bytes, filename)
                     future_to_parser[future] = parser_name
@@ -263,3 +270,73 @@ class EnsembleCoordinator:
         total_unique = len(item_keys)
 
         return multi_source / total_unique if total_unique > 0 else 0.0
+
+    def _parse_with_unstructured_wrapper(self, pdf_bytes: bytes, filename: str) -> Dict:
+        """
+        Wrapper to make Unstructured.io parser compatible with ensemble interface
+        """
+        import os
+        start_time = time.time()
+
+        # Check if API key is available (for enterprise mode)
+        api_key = os.getenv('UNSTRUCTURED_API_KEY')
+        use_api = bool(api_key)
+
+        result = parse_with_unstructured(
+            pdf_bytes=pdf_bytes,
+            filename=filename,
+            use_api=use_api,
+            api_key=api_key,
+            strategy='auto'  # or 'hi_res' for complex layouts
+        )
+
+        if not result['success']:
+            return {
+                'parser_name': 'unstructured',
+                'success': False,
+                'items': [],
+                'metadata': result.get('metadata', {}),
+                'financials': {},
+                'confidence_score': 0.0,
+                'extraction_time_ms': int((time.time() - start_time) * 1000),
+                'errors': [result.get('error', 'Unknown error')]
+            }
+
+        # Convert Unstructured tables to line items
+        tables = result.get('tables', [])
+        line_items = extract_line_items_from_tables(tables)
+
+        # Convert to standard format
+        items = []
+        for item in line_items:
+            items.append({
+                'description': item.get('description', ''),
+                'quantity': item.get('qty', 1.0),
+                'unit': item.get('unit', 'ea'),
+                'unit_price': item.get('rate', 0.0),
+                'total_price': item.get('total', 0.0),
+                'source_parser': 'unstructured',
+                'source_confidence': result.get('confidence', 0.7)
+            })
+
+        # Calculate financials
+        total = sum(i['total_price'] for i in items)
+
+        return {
+            'parser_name': 'unstructured',
+            'success': True,
+            'items': items,
+            'metadata': {
+                **result.get('metadata', {}),
+                'table_count': result.get('table_count', 0),
+                'element_count': result.get('element_count', 0),
+                'narratives': result.get('narratives', [])
+            },
+            'financials': {
+                'total': total,
+                'item_count': len(items)
+            },
+            'confidence_score': result.get('confidence', 0.7),
+            'extraction_time_ms': int((time.time() - start_time) * 1000),
+            'errors': []
+        }
