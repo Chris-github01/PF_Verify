@@ -241,9 +241,16 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Insert new items if we have a quote
-    if (quoteId && newItems.length > 0) {
-      const quoteItems = newItems
+    // Replace ALL items with complete deduplicated set
+    if (quoteId && dedupedItems.length > 0) {
+      // Delete old items (partial data)
+      await supabase
+        .from("quote_items")
+        .delete()
+        .eq("quote_id", quoteId);
+
+      // Insert ALL deduped items
+      const quoteItems = dedupedItems
         .filter((line: any) => line.description && line.description.trim().length > 0)
         .map((line: any) => ({
           quote_id: quoteId,
@@ -271,6 +278,8 @@ Deno.serve(async (req: Request) => {
             items_count: dedupedItems.length,
           })
           .eq("id", quoteId);
+
+        console.log(`[Resume] Replaced ${quoteItems.length} items in quote ${quoteId}`);
       }
     }
 
