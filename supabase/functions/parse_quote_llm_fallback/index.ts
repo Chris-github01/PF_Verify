@@ -107,23 +107,50 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Detect chunk size for adaptive strategy
+    // Detect chunk size for windowing strategy
     const textLength = text.length;
     const isLargeChunk = textLength > 5000;
     const isVeryLargeChunk = textLength > 10000;
 
-    // STEP 1: Count line items (skip for very large chunks to save tokens)
+    console.log(`[LLM Fallback] Text: ${textLength} chars, Strategy: ${isVeryLargeChunk ? 'WINDOWED (very large)' : isLargeChunk ? 'WINDOWED (large)' : 'SINGLE-PASS (small)'}`);
+
+    // STEP 1: Count line items and extract grand total
     let countData: any;
 
-    if (isVeryLargeChunk) {
-      // For very large chunks, estimate instead of counting
-      const estimatedItems = Math.ceil(textLength / 400); // Rough estimate: 1 item per 400 chars
-      countData = {
-        lineItemCount: estimatedItems,
-        quoteTotalAmount: 0,
-        notes: 'Estimated count (chunk too large for detailed counting)'
-      };
-      console.log(`[LLM Fallback] ESTIMATED ${estimatedItems} items (${textLength} chars, too large for counting)`);
+    if (isLargeChunk || isVeryLargeChunk) {
+      // For large chunks, do quick counting without detailed analysis
+      const countingPrompt = `Count line items in this construction quote. Line items have specific descriptions. Skip subtotals, headers, totals. Return JSON: {"lineItemCount": number, "quoteTotalAmount": number}\n\n${text}`;
+
+      console.log('[LLM Fallback] Step 1: Quick counting...', textLength, 'chars');
+
+      const countResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "user", content: countingPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+          max_completion_tokens: 500,
+        }),
+      });
+
+      if (!countResponse.ok) {
+        const errorText = await countResponse.text();
+        console.error('[LLM Fallback] Count request failed:', errorText);
+        throw new Error(`OpenAI API error (count): ${countResponse.status}`);
+      }
+
+      const countResult = await countResponse.json();
+      countData = JSON.parse(countResult.choices?.[0]?.message?.content || '{}');
+
+      console.log('[LLM Fallback] Expected line items:', countData.lineItemCount);
+      console.log('[LLM Fallback] Quote total from PDF:', countData.quoteTotalAmount);
 
     } else {
       // For small/medium chunks, do proper counting
@@ -192,47 +219,54 @@ ${text}`;
 
     const pdfGrandTotal = countData.quoteTotalAmount || 0;
 
-    console.log(`[LLM Fallback] Text: ${textLength} chars, Strategy: ${isVeryLargeChunk ? 'ULTRA-SIMPLE' : isLargeChunk ? 'SIMPLIFIED' : 'STANDARD'}`);
+    // Helper: Split text into line windows for large chunks
+    function splitIntoWindows(text: string, windowSize: number): string[] {
+      const lines = text.split('\n');
 
-    // STEP 2: Adaptive extraction based on chunk size
-    let systemPrompt: string;
-    let userPrompt: string;
+      // Filter to "row-ish" lines (contain numbers or $ or common units)
+      const rowishLines = lines.filter(line => {
+        const hasNumbers = (line.match(/\d+/g) || []).length >= 2;
+        const hasCurrency = line.includes('$') || line.includes('£') || line.includes('€');
+        const hasUnits = /\b(m|mm|ea|nr|lm|m2|m3|kg|hrs?)\b/i.test(line);
+        return hasNumbers || hasCurrency || hasUnits || line.trim().length > 50;
+      });
 
-    if (isVeryLargeChunk) {
-      // VERY LARGE chunks (>10K): Minimal prompt, table-only focus
-      systemPrompt = `Extract line items from quote. ONLY extract table rows with all 5 columns filled.
+      console.log(`[Windowing] ${lines.length} total lines → ${rowishLines.length} row-ish lines`);
 
-Rules:
-1. Must have: Description + Qty + Unit + Rate + Total
-2. Skip: Headers, subtotals, totals, empty rows
-3. Description must be specific (not "INSULATION" or "MASTIC")
+      const windows: string[] = [];
+      for (let i = 0; i < rowishLines.length; i += windowSize) {
+        const windowLines = rowishLines.slice(i, i + windowSize);
+        windows.push(windowLines.join('\n'));
+      }
 
-JSON: {"items": [{"description":"","qty":0,"unit":"","rate":0,"total":0}]}`;
+      return windows;
+    }
 
-      userPrompt = `Find ~${countData.lineItemCount} items:\n\n${text}`;
+    // Helper: Check if JSON response is truncated
+    function isTruncated(jsonString: string): boolean {
+      const trimmed = jsonString.trim();
+      if (!trimmed.endsWith('}')) return true;
+      if (!trimmed.includes(']')) return true;
 
-    } else if (isLargeChunk) {
-      // LARGE chunks (5-10K): Simplified prompt
-      systemPrompt = `Extract ${countData.lineItemCount} line items from construction quote.
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          const lastItem = parsed.items[parsed.items.length - 1];
+          // Check if last item has all required fields
+          return !lastItem.description || lastItem.total === undefined;
+        }
+      } catch {
+        return true;
+      }
 
-EXTRACT line items with specific descriptions (e.g., "PVC Pipe 100mm").
-SKIP subtotals with generic names (e.g., "COMPRESSIVE SEAL", "COLLAR").
+      return false;
+    }
 
-Each item needs:
-- description: specific product/service
-- qty: quantity number
-- unit: unit (M, Nr, EA)
-- rate: unit price
-- total: line total
+    // STEP 2: Extract line items (windowed for large, single-pass for small)
+    let allExtractedItems: any[] = [];
 
-JSON:
-{"items": [{"description":"","qty":0,"unit":"","rate":0,"total":0}], "warnings": []}`;
-
-      userPrompt = `Extract items from:\n\n${text}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
-
-    } else {
-      // STANDARD chunks (<5K): Detailed prompt
-      systemPrompt = `Extract approximately ${countData.lineItemCount} ACTUAL LINE ITEMS from this construction quote.
+    // Always use the STANDARD detailed prompt (works for all sizes)
+    const systemPrompt = `Extract all line items from this construction quote.
 
 CRITICAL: Extract ONLY line items. DO NOT extract section subtotals or category summaries.
 
@@ -263,57 +297,135 @@ Return JSON:
   "warnings": ["string"]
 }`;
 
-      userPrompt = `Extract all line items from this quote:
+    if (isLargeChunk || isVeryLargeChunk) {
+      // WINDOWED APPROACH for large chunks
+      const windowSize = isVeryLargeChunk ? 60 : 80; // 60 lines for very large, 80 for large
+      const windows = splitIntoWindows(text, windowSize);
+
+      console.log(`[LLM Fallback] Step 2: Windowed extraction (${windows.length} windows of ~${windowSize} lines each)...`);
+
+      for (let i = 0; i < windows.length; i++) {
+        const windowText = windows[i];
+        const windowNum = i + 1;
+
+        console.log(`[Window ${windowNum}/${windows.length}] Processing ${windowText.length} chars...`);
+
+        const userPrompt = `Extract all line items in this text:\n\n${windowText}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
+
+        let attempt = 0;
+        let windowItems: any[] = [];
+        let success = false;
+
+        while (attempt < 2 && !success) {
+          attempt++;
+          const maxTokens = attempt === 1 ? 2000 : 3000; // Increase tokens on retry
+
+          const windowResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openaiApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              response_format: { type: "json_object" },
+              temperature: 0.1,
+              max_completion_tokens: maxTokens,
+            }),
+          });
+
+          if (!windowResponse.ok) {
+            const errorText = await windowResponse.text();
+            console.error(`[Window ${windowNum}] Error: ${errorText}`);
+            continue;
+          }
+
+          const windowResult = await windowResponse.json();
+          const content = windowResult.choices?.[0]?.message?.content;
+
+          if (!content) {
+            console.error(`[Window ${windowNum}] No content in response`);
+            continue;
+          }
+
+          // Check for truncation
+          if (isTruncated(content)) {
+            console.warn(`[Window ${windowNum}] Response truncated, retrying with more tokens...`);
+            continue;
+          }
+
+          const parsed = JSON.parse(content);
+          windowItems = parsed.items || [];
+          console.log(`[Window ${windowNum}] Extracted ${windowItems.length} items`);
+
+          allExtractedItems.push(...windowItems);
+          success = true;
+        }
+
+        if (!success) {
+          console.error(`[Window ${windowNum}] Failed after ${attempt} attempts`);
+        }
+      }
+
+      console.log(`[LLM Fallback] Windowed extraction complete: ${allExtractedItems.length} items from ${windows.length} windows`);
+
+    } else {
+      // SINGLE-PASS for small chunks
+      console.log('[LLM Fallback] Step 2: Single-pass extraction...');
+
+      const userPrompt = `Extract all line items from this quote:
 
 ${text}
 
 ${supplierName ? `Supplier: ${supplierName}` : ''}
 
 Return JSON with all items found.`;
+
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+          max_completion_tokens: 16384,
+        }),
+      });
+
+      if (!openaiResponse.ok) {
+        const errorText = await openaiResponse.text();
+        console.error('[LLM Fallback] OpenAI error:', errorText);
+        throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
+      }
+
+      const openaiResult = await openaiResponse.json();
+      const content = openaiResult.choices?.[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content in OpenAI response');
+      }
+
+      console.log('[LLM Fallback] Got response, parsing JSON...');
+      const parsed: ParseResponse = JSON.parse(content);
+
+      allExtractedItems = parsed.items || [];
+      console.log(`[LLM Fallback] Single-pass complete: ${allExtractedItems.length} items`);
     }
 
-    console.log('[LLM Fallback] Step 2: Extracting', countData.lineItemCount, 'items...');
-
-    // Adaptive token limits based on chunk size
-    const maxTokens = isVeryLargeChunk ? 4096 : isLargeChunk ? 8192 : 16384;
-    console.log(`[LLM Fallback] Max completion tokens: ${maxTokens}`);
-
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-        max_completion_tokens: maxTokens,
-      }),
-    });
-
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('[LLM Fallback] OpenAI error:', errorText);
-      throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
-    }
-
-    const openaiResult = await openaiResponse.json();
-    const content = openaiResult.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content in OpenAI response');
-    }
-
-    console.log('[LLM Fallback] Got response, parsing JSON...');
-    const parsed: ParseResponse = JSON.parse(content);
-
-    const rawItems = parsed.items || [];
-    console.log(`[LLM Fallback] Raw items from LLM: ${rawItems.length}`);
+    // STEP 3: Filter and process all extracted items
+    const rawItems = allExtractedItems;
+    console.log(`[LLM Fallback] Total raw items: ${rawItems.length}`);
 
     const TOTAL_PATTERNS = [
       /^grand[-\s]?total$/i,
@@ -430,29 +542,56 @@ Return JSON with all items found.`;
 
     console.log(`[LLM Fallback] Added line numbers to ${itemsWithLineNumbers.length} items`);
 
-    // Fix quantities and rates
+    // Fix quantities and rates (smarter unit handling)
     const fixedItems = itemsWithLineNumbers.map(item => {
       let qty = item.qty || 1;
       const total = item.total || 0;
       let rate = item.rate || 0;
+      const unit = (item.unit || '').toLowerCase();
 
-      // CRITICAL: Force quantities to be integers
-      if (qty !== Math.floor(qty)) {
+      // Check if numbers already reconcile (within 1%)
+      const expectedTotal = qty * rate;
+      const alreadyReconciles = Math.abs(expectedTotal - total) / Math.max(total, 1) < 0.01;
+
+      if (alreadyReconciles) {
+        // Numbers are good, don't touch them
+        return { ...item, qty, rate };
+      }
+
+      // Detect unit type
+      const isCountUnit = /^(ea|nr|item|unit|each|no|pcs?)$/i.test(unit);
+      const isLengthUnit = /^(m|mm|lm|lin\.?m|linear)$/i.test(unit);
+      const isAreaUnit = /^(m2|m²|sqm|sq\.?m)$/i.test(unit);
+      const isVolumeUnit = /^(m3|m³|cum|cu\.?m)$/i.test(unit);
+
+      // Only force integers for count units (EA, Nr)
+      if (isCountUnit && qty !== Math.floor(qty)) {
         const originalQty = qty;
-        // If decimal is very close to 1 (like 1.0 or 0.99), assume qty=1
         if (qty > 0.8 && qty < 1.2) {
           qty = 1;
         } else {
-          // Otherwise round to nearest integer
           qty = Math.round(qty);
         }
-        console.log(`[Qty Fix] "${item.description}": qty was ${originalQty} (decimal), corrected to ${qty} (integer)`);
+        console.log(`[Qty Fix] "${item.description}": qty was ${originalQty} (decimal), corrected to ${qty} (integer, unit=${unit})`);
       }
 
-      // Ensure qty is at least 1
-      if (qty < 1) {
-        console.log(`[Qty Fix] "${item.description}": qty was ${qty}, corrected to 1`);
-        qty = 1;
+      // For length/area/volume units, keep 1-2 decimal places
+      if ((isLengthUnit || isAreaUnit || isVolumeUnit) && qty !== Math.floor(qty)) {
+        const originalQty = qty;
+        // Keep 2 decimals, but remove nonsense like 0.0001 or 99999
+        if (qty < 0.01 || qty > 100000) {
+          qty = Math.round(qty);
+          console.log(`[Qty Fix] "${item.description}": qty was ${originalQty} (extreme value), rounded to ${qty}`);
+        } else {
+          qty = Math.round(qty * 100) / 100; // Keep 2 decimals
+        }
+      }
+
+      // Ensure qty is at least 0.01 (for length units) or 1 (for count units)
+      const minQty = isCountUnit ? 1 : 0.01;
+      if (qty < minQty) {
+        console.log(`[Qty Fix] "${item.description}": qty was ${qty}, corrected to ${minQty}`);
+        qty = minQty;
       }
 
       // Fix rate: ensure rate = total / qty
