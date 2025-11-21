@@ -107,8 +107,29 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // STEP 1: Count actual line items, not subtotals
-    const countingPrompt = `You are analyzing a construction quote to count ACTUAL LINE ITEMS ONLY.
+    // Detect chunk size for adaptive strategy
+    const textLength = text.length;
+    const isLargeChunk = textLength > 5000;
+    const isVeryLargeChunk = textLength > 10000;
+
+    // STEP 1: Count line items (skip for very large chunks to save tokens)
+    let countData: any;
+
+    if (isVeryLargeChunk) {
+      // For very large chunks, estimate instead of counting
+      const estimatedItems = Math.ceil(textLength / 400); // Rough estimate: 1 item per 400 chars
+      countData = {
+        lineItemCount: estimatedItems,
+        quoteTotalAmount: 0,
+        notes: 'Estimated count (chunk too large for detailed counting)'
+      };
+      console.log(`[LLM Fallback] ESTIMATED ${estimatedItems} items (${textLength} chars, too large for counting)`);
+
+    } else {
+      // For small/medium chunks, do proper counting
+      const countingPrompt = isLargeChunk
+        ? `Count line items in this construction quote. Line items have specific descriptions (e.g., "PVC Pipe 100mm"). Skip subtotals (e.g., "INSULATION", "MASTIC"). Return JSON: {"lineItemCount": number, "quoteTotalAmount": number}\n\n${text}`
+        : `You are analyzing a construction quote to count ACTUAL LINE ITEMS ONLY.
 
 IMPORTANT DISTINCTION:
 - LINE ITEM: A specific product/service with detailed description (e.g., "PVC Pipe 100mm Concrete Floor", "Cable Bundle Up to 40mm")
@@ -136,42 +157,82 @@ Return JSON:
 DOCUMENT:
 ${text}`;
 
-    console.log('[LLM Fallback] Step 1: Counting line items...', text.length, 'chars');
+      console.log('[LLM Fallback] Step 1: Counting line items...', textLength, 'chars');
 
-    const countResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "user", content: countingPrompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-        max_completion_tokens: 500,
-      }),
-    });
+      const countResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "user", content: countingPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+          max_completion_tokens: 500,
+        }),
+      });
 
-    if (!countResponse.ok) {
-      const errorText = await countResponse.text();
-      console.error('[LLM Fallback] Count request failed:', errorText);
-      throw new Error(`OpenAI API error (count): ${countResponse.status}`);
+      if (!countResponse.ok) {
+        const errorText = await countResponse.text();
+        console.error('[LLM Fallback] Count request failed:', errorText);
+        throw new Error(`OpenAI API error (count): ${countResponse.status}`);
+      }
+
+      const countResult = await countResponse.json();
+      countData = JSON.parse(countResult.choices?.[0]?.message?.content || '{}');
+
+      console.log('[LLM Fallback] Expected line items:', countData.lineItemCount);
+      console.log('[LLM Fallback] Quote total from PDF:', countData.quoteTotalAmount);
+      console.log('[LLM Fallback] Notes:', countData.notes);
     }
-
-    const countResult = await countResponse.json();
-    const countData = JSON.parse(countResult.choices?.[0]?.message?.content || '{}');
-
-    console.log('[LLM Fallback] Expected line items:', countData.lineItemCount);
-    console.log('[LLM Fallback] Quote total from PDF:', countData.quoteTotalAmount);
-    console.log('[LLM Fallback] Notes:', countData.notes);
 
     const pdfGrandTotal = countData.quoteTotalAmount || 0;
 
-    // STEP 2: Extract ONLY actual line items, not subtotals
-    const systemPrompt = `Extract approximately ${countData.lineItemCount} ACTUAL LINE ITEMS from this construction quote.
+    console.log(`[LLM Fallback] Text: ${textLength} chars, Strategy: ${isVeryLargeChunk ? 'ULTRA-SIMPLE' : isLargeChunk ? 'SIMPLIFIED' : 'STANDARD'}`);
+
+    // STEP 2: Adaptive extraction based on chunk size
+    let systemPrompt: string;
+    let userPrompt: string;
+
+    if (isVeryLargeChunk) {
+      // VERY LARGE chunks (>10K): Minimal prompt, table-only focus
+      systemPrompt = `Extract line items from quote. ONLY extract table rows with all 5 columns filled.
+
+Rules:
+1. Must have: Description + Qty + Unit + Rate + Total
+2. Skip: Headers, subtotals, totals, empty rows
+3. Description must be specific (not "INSULATION" or "MASTIC")
+
+JSON: {"items": [{"description":"","qty":0,"unit":"","rate":0,"total":0}]}`;
+
+      userPrompt = `Find ~${countData.lineItemCount} items:\n\n${text}`;
+
+    } else if (isLargeChunk) {
+      // LARGE chunks (5-10K): Simplified prompt
+      systemPrompt = `Extract ${countData.lineItemCount} line items from construction quote.
+
+EXTRACT line items with specific descriptions (e.g., "PVC Pipe 100mm").
+SKIP subtotals with generic names (e.g., "COMPRESSIVE SEAL", "COLLAR").
+
+Each item needs:
+- description: specific product/service
+- qty: quantity number
+- unit: unit (M, Nr, EA)
+- rate: unit price
+- total: line total
+
+JSON:
+{"items": [{"description":"","qty":0,"unit":"","rate":0,"total":0}], "warnings": []}`;
+
+      userPrompt = `Extract items from:\n\n${text}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
+
+    } else {
+      // STANDARD chunks (<5K): Detailed prompt
+      systemPrompt = `Extract approximately ${countData.lineItemCount} ACTUAL LINE ITEMS from this construction quote.
 
 CRITICAL: Extract ONLY line items. DO NOT extract section subtotals or category summaries.
 
@@ -202,15 +263,20 @@ Return JSON:
   "warnings": ["string"]
 }`;
 
-    const userPrompt = `Extract all line items from this quote:
+      userPrompt = `Extract all line items from this quote:
 
 ${text}
 
 ${supplierName ? `Supplier: ${supplierName}` : ''}
 
 Return JSON with all items found.`;
+    }
 
     console.log('[LLM Fallback] Step 2: Extracting', countData.lineItemCount, 'items...');
+
+    // Adaptive token limits based on chunk size
+    const maxTokens = isVeryLargeChunk ? 4096 : isLargeChunk ? 8192 : 16384;
+    console.log(`[LLM Fallback] Max completion tokens: ${maxTokens}`);
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -226,7 +292,7 @@ Return JSON with all items found.`;
         ],
         response_format: { type: "json_object" },
         temperature: 0.1,
-        max_completion_tokens: 16384,
+        max_completion_tokens: maxTokens,
       }),
     });
 
