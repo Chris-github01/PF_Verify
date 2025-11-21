@@ -107,21 +107,30 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // STEP 1: Simplified counting - just extract everything and let post-processing filter
-    const countingPrompt = `You are extracting line items from a construction quote.
+    // STEP 1: Count actual line items, not subtotals
+    const countingPrompt = `You are analyzing a construction quote to count ACTUAL LINE ITEMS ONLY.
 
-Count EVERY row that has: description, quantity, unit, and price/total.
+IMPORTANT DISTINCTION:
+- LINE ITEM: A specific product/service with detailed description (e.g., "PVC Pipe 100mm Concrete Floor", "Cable Bundle Up to 40mm")
+- SUBTOTAL: A category summary that aggregates multiple line items (e.g., "COMPRESSIVE SEAL", "COLLAR", "CAVITY BARRIER", "Subtotal for Section A")
 
-Skip only: table headers, page numbers, and rows that say "grand total" or "total estimate".
+COUNT ONLY LINE ITEMS. DO NOT count:
+- Section subtotals (usually generic category names with large amounts)
+- Grand totals
+- Table headers
+- Page numbers
 
-If a row has quantity and price data, COUNT IT (even if it says "subtotal" - we'll filter later).
-
-Better to overcount than miss items.
+CLUES that something is a SUBTOTAL, not a line item:
+- Generic one-word or two-word category name (e.g., "INSULATION", "MASTIC", "DOOR SEAL")
+- Quantity of 1 with unusually large total (>$40,000)
+- The word "subtotal" or "sub-total" in the description
+- Appears at the end of a section before moving to a new category
 
 Return JSON:
 {
   "lineItemCount": number,
-  "quoteTotalAmount": number
+  "quoteTotalAmount": number,
+  "notes": "brief explanation of how you distinguished line items from subtotals"
 }
 
 DOCUMENT:
@@ -159,24 +168,34 @@ ${text}`;
     console.log('[LLM Fallback] Quote structure:', countData.structure);
     console.log('[LLM Fallback] Notes:', countData.notes);
 
-    // STEP 2: Extract all line items (simplified)
-    const systemPrompt = `Extract approximately ${countData.lineItemCount} line items from this construction quote.
+    // STEP 2: Extract ONLY actual line items, not subtotals
+    const systemPrompt = `Extract approximately ${countData.lineItemCount} ACTUAL LINE ITEMS from this construction quote.
 
-Extract every row with: description, quantity, unit, and price.
+CRITICAL: Extract ONLY line items. DO NOT extract section subtotals or category summaries.
 
-Skip only: "grand total", "total estimate", headers, page numbers.
+LINE ITEM vs SUBTOTAL:
+- LINE ITEM: Specific product/service with detailed description (e.g., "PVC Pipe 100mm Concrete Floor qty:933 @$129.38")
+- SUBTOTAL: Generic category summary (e.g., "COMPRESSIVE SEAL $809,496" - this is the sum of multiple line items)
 
-For each item extract:
-- description: text describing the item
-- qty: number from quantity column
+DO NOT EXTRACT:
+- Section subtotals (generic category names like "COMPRESSIVE SEAL", "COLLAR", "CAVITY BARRIER", "INSULATION", "MASTIC")
+- Rows where qty=1 and total is very large (likely a subtotal, not a single item)
+- Lines that say "subtotal", "sub-total", "section total"
+- Grand totals or estimate totals
+- Table headers or page numbers
+
+For each ACTUAL LINE ITEM extract:
+- description: detailed text describing the specific item
+- qty: quantity from quantity column
 - unit: unit of measure (M, Nr, EA, etc)
 - rate: unit price (calculate as total/qty if not shown)
 - total: total price for this line
 - section: category/section name if visible
+- isSubtotal: true if you suspect this is a subtotal (helps with filtering)
 
 Return JSON:
 {
-  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
+  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string", "isSubtotal": boolean}],
   "confidence": number,
   "warnings": ["string"]
 }`;
@@ -258,6 +277,12 @@ Return JSON with all items found.`;
 
       if (desc.length === 0) {
         console.log(`[Filter] Excluding empty description`);
+        return false;
+      }
+
+      // If LLM marked it as a subtotal, exclude it
+      if (item.isSubtotal === true) {
+        console.log(`[Filter] Excluding LLM-identified subtotal: "${item.description}"`);
         return false;
       }
 
