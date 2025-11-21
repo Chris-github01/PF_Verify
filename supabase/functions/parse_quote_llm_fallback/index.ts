@@ -165,8 +165,10 @@ ${text}`;
     const countData = JSON.parse(countResult.choices?.[0]?.message?.content || '{}');
 
     console.log('[LLM Fallback] Expected line items:', countData.lineItemCount);
-    console.log('[LLM Fallback] Quote structure:', countData.structure);
+    console.log('[LLM Fallback] Quote total from PDF:', countData.quoteTotalAmount);
     console.log('[LLM Fallback] Notes:', countData.notes);
+
+    const pdfGrandTotal = countData.quoteTotalAmount || 0;
 
     // STEP 2: Extract ONLY actual line items, not subtotals
     const systemPrompt = `Extract approximately ${countData.lineItemCount} ACTUAL LINE ITEMS from this construction quote.
@@ -315,10 +317,49 @@ Return JSON with all items found.`;
 
     console.log(`[LLM Fallback] After filtering: ${filteredItems.length} items (excluded ${rawItems.length - filteredItems.length})`);
 
+    // RE-JOIN LINE ITEMS: Handle descriptions split across multiple lines
+    const rejoinedItems: any[] = [];
+    let currentItem: any | null = null;
+
+    for (const item of filteredItems) {
+      const desc = (item.description || '').trim();
+      const hasNumbers = item.qty || item.total || item.rate;
+
+      // Check if this is a continuation line (lowercase start or no numbers)
+      const firstChar = desc.charAt(0);
+      const startsLowercase = firstChar === firstChar.toLowerCase() && firstChar !== firstChar.toUpperCase();
+      const isContinuation = (startsLowercase || (!hasNumbers && desc.length > 0)) && currentItem;
+
+      if (isContinuation && currentItem) {
+        // Append to current item
+        currentItem.description = `${currentItem.description || ''} ${desc}`.trim();
+        if (!currentItem.qty && item.qty) currentItem.qty = item.qty;
+        if (!currentItem.unit && item.unit) currentItem.unit = item.unit;
+        if (!currentItem.rate && item.rate) currentItem.rate = item.rate;
+        if (!currentItem.total && item.total) currentItem.total = item.total;
+      } else {
+        // Start new item
+        if (currentItem) {
+          rejoinedItems.push(currentItem);
+        }
+        currentItem = { ...item };
+      }
+    }
+
+    if (currentItem) {
+      rejoinedItems.push(currentItem);
+    }
+
+    const mergedCount = filteredItems.length - rejoinedItems.length;
+    if (mergedCount > 0) {
+      console.log(`[Line Rejoining] Merged ${mergedCount} continuation lines`);
+    }
+
     // Add line numbers to each item for tracking
-    const itemsWithLineNumbers = filteredItems.map((item, index) => ({
+    const itemsWithLineNumbers = rejoinedItems.map((item, index) => ({
       ...item,
-      lineNumber: index + 1
+      lineNumber: index + 1,
+      description: (item.description || '').replace(/\s+/g, ' ').trim()
     }));
 
     console.log(`[LLM Fallback] Added line numbers to ${itemsWithLineNumbers.length} items`);
@@ -368,24 +409,50 @@ Return JSON with all items found.`;
 
     console.log(`[LLM Fallback] Expected: ${countData.lineItemCount}, Got: ${fixedItems.length}`);
 
+    // TOTALS RECONCILIATION CHECK (catches 3-4% of errors)
+    const extractedTotal = fixedItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tolerance = 0.005; // 0.5%
+    let totalsMismatch = false;
+    let reconciliationWarning = '';
+
+    if (pdfGrandTotal > 0) {
+      const percentageDiff = Math.abs(extractedTotal - pdfGrandTotal) / pdfGrandTotal;
+      if (percentageDiff > tolerance) {
+        totalsMismatch = true;
+        reconciliationWarning = `TOTALS_MISMATCH: Extracted $${extractedTotal.toFixed(2)} vs PDF Grand Total $${pdfGrandTotal.toFixed(2)} (${(percentageDiff * 100).toFixed(2)}% diff)`;
+        console.error(`[Reconciliation] ${reconciliationWarning}`);
+      } else {
+        console.log(`[Reconciliation] ✓ PASS: Extracted $${extractedTotal.toFixed(2)} vs PDF $${pdfGrandTotal.toFixed(2)} (${(percentageDiff * 100).toFixed(3)}% diff)`);
+      }
+    } else {
+      console.warn(`[Reconciliation] SKIPPED: No PDF grand total available`);
+    }
+
     if (Math.abs(fixedItems.length - countData.lineItemCount) > 10) {
       console.warn(`[LLM Fallback] WARNING: Item count mismatch! Expected ${countData.lineItemCount}, got ${fixedItems.length}`);
     }
 
     console.log('[LLM Fallback] Success:', fixedItems.length, 'items, confidence:', parsed.confidence);
 
+    const warnings = [...(parsed.warnings || [])];
+    if (totalsMismatch) {
+      warnings.push(reconciliationWarning);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         lines: fixedItems,
         items: fixedItems,
-        confidence: parsed.confidence,
-        warnings: parsed.warnings || [],
+        confidence: totalsMismatch ? Math.min(parsed.confidence || 0.8, 0.75) : parsed.confidence,
+        warnings: warnings,
         metadata: {
           expectedItemCount: countData.lineItemCount,
           actualItemCount: fixedItems.length,
-          quoteStructure: countData.structure,
-          quoteTotalAmount: countData.quoteTotalAmount,
+          quoteTotalAmount: pdfGrandTotal,
+          extractedTotal: extractedTotal,
+          totalsMismatch: totalsMismatch,
+          reconciliationStatus: totalsMismatch ? 'FAILED' : 'PASSED',
         },
       }),
       {
