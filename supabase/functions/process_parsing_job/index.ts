@@ -238,7 +238,7 @@ Deno.serve(async (req: Request) => {
         throw new Error("Unsupported file format");
       }
 
-      const CHUNK_SIZE = 2;
+      const CHUNK_SIZE = 1; // Reduced from 2 to 1 for better reliability
       const chunks: string[] = [];
 
       for (let i = 0; i < allPages.length; i += CHUNK_SIZE) {
@@ -299,7 +299,7 @@ Deno.serve(async (req: Request) => {
             await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
           }
 
-          const timeoutMs = 300000; // 5 minutes for large documents
+          const timeoutMs = 120000; // 2 minutes (reduced from 5 for faster failure detection)
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -385,8 +385,27 @@ Deno.serve(async (req: Request) => {
           .eq("id", jobId);
       }
 
+      // Calculate success metrics
+      const successRate = ((totalChunks - failedChunks.length) / totalChunks) * 100;
+      const isPartialSuccess = failedChunks.length > 0 && allItems.length > 0;
+
       if (failedChunks.length > 0) {
-        console.log(`Warning: ${failedChunks.length} chunks failed: ${failedChunks.join(', ')}`);
+        console.log(`Warning: ${failedChunks.length}/${totalChunks} chunks failed (${successRate.toFixed(1)}% success rate)`);
+        console.log(`Failed chunks: ${failedChunks.join(', ')}`);
+
+        // If too many chunks failed, mark as failed
+        if (failedChunks.length >= totalChunks * 0.5) {
+          await supabase
+            .from("parsing_jobs")
+            .update({
+              status: "failed",
+              error_message: `Too many chunks failed: ${failedChunks.length}/${totalChunks}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", jobId);
+
+          throw new Error(`Parsing failed: ${failedChunks.length}/${totalChunks} chunks failed`);
+        }
       }
 
       // Only remove items with duplicate line numbers (same item extracted from overlapping chunks)
@@ -419,28 +438,83 @@ Deno.serve(async (req: Request) => {
 
       let quoteId = typedJob.quote_id;
 
-      if (!quoteId) {
-        const { data: newQuote, error: quoteError } = await supabase
-          .from("quotes")
-          .insert({
-            project_id: typedJob.project_id,
-            supplier_name: typedJob.supplier_name,
-            total_amount: 0,
-            items_count: parsedLines.length,
-            status: "pending",
-            user_id: typedJob.user_id,
-            organisation_id: typedJob.organisation_id,
-          })
-          .select()
-          .single();
+      // CRITICAL: Wrap quote creation in try-catch to prevent job from getting stuck
+      try {
+        if (!quoteId) {
+          const { data: newQuote, error: quoteError } = await supabase
+            .from("quotes")
+            .insert({
+              project_id: typedJob.project_id,
+              supplier_name: typedJob.supplier_name,
+              total_amount: 0,
+              items_count: parsedLines.length,
+              status: "pending",
+              user_id: typedJob.user_id,
+              organisation_id: typedJob.organisation_id,
+            })
+            .select()
+            .single();
 
-        if (quoteError || !newQuote) {
-          console.error("Failed to create quote:", quoteError);
-          console.error("Quote error details:", JSON.stringify(quoteError, null, 2));
-          throw new Error(`Failed to create quote: ${quoteError?.message || 'Unknown error'}`);
+          if (quoteError || !newQuote) {
+            console.error("Failed to create quote:", quoteError);
+            console.error("Quote error details:", JSON.stringify(quoteError, null, 2));
+
+            // DON'T throw - save partial results to parsing job instead
+            await supabase
+              .from("parsing_jobs")
+              .update({
+                status: isPartialSuccess ? "completed" : "failed",
+                progress: 100,
+                parsed_lines: parsedLines,
+                error_message: `Quote creation failed: ${quoteError?.message || 'Unknown error'}. Partial results saved (${parsedLines.length} items from ${totalChunks - failedChunks.length}/${totalChunks} chunks).`,
+                completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", jobId);
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                jobId,
+                quoteId: null,
+                linesCount: parsedLines.length,
+                warning: `Quote creation failed but ${parsedLines.length} items were extracted`,
+                failedChunks: failedChunks.length,
+                totalChunks: totalChunks
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          quoteId = newQuote.id;
         }
+      } catch (quoteError) {
+        console.error("Exception during quote creation:", quoteError);
 
-        quoteId = newQuote.id;
+        // Save partial results
+        await supabase
+          .from("parsing_jobs")
+          .update({
+            status: "completed",
+            progress: 100,
+            parsed_lines: parsedLines,
+            error_message: `Partial completion: ${parsedLines.length} items from ${totalChunks - failedChunks.length}/${totalChunks} chunks. Quote creation error.`,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            jobId,
+            linesCount: parsedLines.length,
+            warning: "Partial extraction completed",
+            failedChunks: failedChunks.length,
+            totalChunks: totalChunks
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       console.log(`Total parsed lines after dedup: ${parsedLines.length}`);
@@ -493,15 +567,23 @@ Deno.serve(async (req: Request) => {
           .eq("id", quoteId);
       }
 
+      // Update job with completion status and warnings if any chunks failed
+      const updateData: any = {
+        quote_id: quoteId,
+        status: "completed",
+        progress: 100,
+        parsed_lines: parsedLines,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (failedChunks.length > 0) {
+        updateData.error_message = `Partial completion: ${failedChunks.length}/${totalChunks} chunks failed. Successfully extracted ${parsedLines.length} items from ${totalChunks - failedChunks.length} chunks.`;
+      }
+
       await supabase
         .from("parsing_jobs")
-        .update({
-          quote_id: quoteId,
-          status: "completed",
-          progress: 100,
-          parsed_lines: parsedLines,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", jobId);
 
       return new Response(
@@ -510,6 +592,10 @@ Deno.serve(async (req: Request) => {
           jobId,
           quoteId,
           linesCount: parsedLines.length,
+          chunksProcessed: totalChunks - failedChunks.length,
+          totalChunks: totalChunks,
+          failedChunks: failedChunks.length > 0 ? failedChunks : undefined,
+          warnings: failedChunks.length > 0 ? [`${failedChunks.length} chunks failed`] : undefined,
         }),
         {
           status: 200,

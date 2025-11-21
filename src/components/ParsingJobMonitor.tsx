@@ -232,7 +232,9 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted }: Parsing
                 </div>
                 <p className="text-xs text-gray-500 truncate">{job.file_name}</p>
                 {job.error_message && (
-                  <p className="text-xs text-red-600 mt-1">{job.error_message}</p>
+                  <p className={`text-xs mt-1 ${job.status === 'completed' ? 'text-orange-600' : 'text-red-600'}`}>
+                    {job.error_message}
+                  </p>
                 )}
               </div>
             </div>
@@ -267,9 +269,26 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted }: Parsing
             )}
 
             {job.status === 'completed' && job.parsed_lines && (
-              <span className="text-xs text-gray-600 ml-4">
-                {job.parsed_lines.length} items
-              </span>
+              <div className="flex items-center gap-2 ml-4">
+                <span className="text-xs text-gray-600">
+                  {job.parsed_lines.length} items
+                </span>
+                {job.error_message && job.error_message.includes('chunks failed') && (
+                  <button
+                    onClick={() => handleResumeJob(job.id)}
+                    disabled={resuming.has(job.id)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Some chunks failed. Click to retry and potentially recover more items."
+                  >
+                    {resuming.has(job.id) ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                    <span>Retry Failed</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         ))}
