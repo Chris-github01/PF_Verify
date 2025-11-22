@@ -49,20 +49,22 @@ export default function ContractManager({ projectId, onNavigateBack }: ContractM
         setProjectInfo(project);
       }
 
-      const { data: awardData } = await supabase
-        .from('award_recommendations')
-        .select('recommended_supplier, recommended_total, created_at')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const approvedQuoteId = project?.approved_quote_id;
 
-      if (awardData && awardData.recommended_supplier) {
-        setAwardInfo({
-          supplier_name: awardData.recommended_supplier,
-          total_amount: awardData.recommended_total || 0,
-          awarded_date: awardData.created_at
-        });
+      if (approvedQuoteId) {
+        const { data: approvedQuote } = await supabase
+          .from('quotes')
+          .select('supplier_name, total_amount, updated_at')
+          .eq('id', approvedQuoteId)
+          .maybeSingle();
+
+        if (approvedQuote) {
+          setAwardInfo({
+            supplier_name: approvedQuote.supplier_name,
+            total_amount: approvedQuote.total_amount || 0,
+            awarded_date: approvedQuote.updated_at
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading contract manager data:', error);
