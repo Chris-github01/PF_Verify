@@ -37,7 +37,11 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
 
       const { data: newOrg, error: orgError } = await supabase
         .from('organisations')
-        .insert({ name: newOrgName.trim() })
+        .insert({
+          name: newOrgName.trim(),
+          created_by_user_id: user.id,
+          status: 'active'
+        })
         .select()
         .single();
 
@@ -48,7 +52,8 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
         .insert({
           organisation_id: newOrg.id,
           user_id: user.id,
-          role: 'admin'
+          role: 'admin',
+          status: 'active'
         });
 
       await refreshOrganisations();
