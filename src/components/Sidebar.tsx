@@ -13,9 +13,11 @@ import {
   Sparkles,
   ClipboardCheck,
   Briefcase,
+  ShieldAlert,
 } from 'lucide-react';
 import { t } from '../i18n';
 import { useOrganisation } from '../lib/organisationContext';
+import { useAdmin } from '../lib/adminContext';
 
 export type SidebarTab =
   | 'dashboard'
@@ -50,6 +52,7 @@ const menuItems = [
 export default function Sidebar({ activeTab, onTabChange, projectId }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { hasPermission } = useOrganisation();
+  const { isMasterAdmin } = useAdmin();
 
   return (
     <div
@@ -101,6 +104,23 @@ export default function Sidebar({ activeTab, onTabChange, projectId }: SidebarPr
           );
         })}
       </nav>
+
+      {isMasterAdmin && (
+        <div className="p-2 border-t border-gray-200">
+          <button
+            onClick={() => window.location.href = '/admin'}
+            className={`
+              w-full flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-all
+              text-gray-700 hover:bg-gray-50 border border-gray-200
+              ${collapsed ? 'justify-center' : ''}
+            `}
+            title={collapsed ? 'Admin Console' : undefined}
+          >
+            <ShieldAlert size={18} className="flex-shrink-0" />
+            {!collapsed && <span>Admin Console</span>}
+          </button>
+        </div>
+      )}
 
       <button
         onClick={() => setCollapsed(!collapsed)}
