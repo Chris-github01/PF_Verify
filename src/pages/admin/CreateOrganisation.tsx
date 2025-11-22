@@ -53,11 +53,14 @@ export default function CreateOrganisation() {
       let ownerId = '';
       let memberStatus = 'invited';
 
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', ownerEmail)
-        .maybeSingle();
+      // Check if user exists in auth.users
+      const { data: { users: existingUsers }, error: userLookupError } = await supabase.auth.admin.listUsers();
+
+      if (userLookupError) {
+        console.error('Error looking up users:', userLookupError);
+      }
+
+      const existingUser = existingUsers?.find(u => u.email === ownerEmail);
 
       if (existingUser) {
         ownerId = existingUser.id;
