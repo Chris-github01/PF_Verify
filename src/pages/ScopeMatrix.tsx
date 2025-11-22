@@ -53,7 +53,6 @@ interface MatrixDiagnostics {
 function isScopeMatrixReady(quote: QuoteInfo): boolean {
   return quote.parse_status === 'completed' &&
          quote.items_count > 0 &&
-         quote.mapped_items_count > 0 &&
          !quote.has_failed_chunks;
 }
 
