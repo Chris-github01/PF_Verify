@@ -7,7 +7,7 @@ import {
   TrendingUp,
   Building2,
   Clock,
-  CheckCircle2,
+  CheckCircle,
   Circle,
   ArrowRight
 } from 'lucide-react';
@@ -395,31 +395,42 @@ export default function NewProjectDashboard({
                 <h2 className="text-[20px] font-semibold text-gray-900">Project Workflow</h2>
               </div>
               <div>
-                {steps.map((step, index) => (
-                  <button
-                    key={step.id}
-                    onClick={() => handleNavigateToStep(step.route)}
-                    className="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left group"
-                  >
-                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors flex-shrink-0">
-                      {index + 1}
-                    </div>
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {step.status === 'completed' ? (
-                        <CheckCircle2 className="text-green-600 flex-shrink-0" size={18} />
-                      ) : step.status === 'in_progress' ? (
-                        <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={18} />
+                {steps.map((step, index) => {
+                  const isCompleted = step.status === 'completed';
+                  const isClickable = !isCompleted;
+
+                  return (
+                    <div
+                      key={step.id}
+                      onClick={isClickable ? () => handleNavigateToStep(step.route) : undefined}
+                      className={`w-full flex items-center gap-3 py-3 px-4 border-b border-gray-100 last:border-b-0 ${
+                        isClickable ? 'cursor-pointer hover:bg-gray-50 group' : 'cursor-default'
+                      } transition-colors`}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
                       ) : (
-                        <Circle className="text-gray-400 flex-shrink-0" size={18} />
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors flex-shrink-0">
+                          {index + 1}
+                        </div>
                       )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 text-[15px]">{step.name}</div>
-                        <div className="text-[11px] text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {step.status === 'in_progress' ? (
+                          <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={18} />
+                        ) : step.status === 'not_started' ? (
+                          <Circle className="text-gray-400 flex-shrink-0" size={18} />
+                        ) : null}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 text-[15px]">{step.name}</div>
+                          <div className="text-[11px] text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                        </div>
                       </div>
+                      {isClickable && (
+                        <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={14} />
+                      )}
                     </div>
-                    <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={14} />
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
