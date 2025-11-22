@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp, CheckSquare, Square, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getModelRateProvider } from '../lib/modelRate/modelRateProvider';
 import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgainstModel';
@@ -29,11 +29,19 @@ const getFlagColor = (flag: string): string => {
   }
 };
 
+interface QuoteInfo {
+  id: string;
+  supplier_name: string;
+  quote_reference?: string;
+  total_amount?: number;
+  is_normalized: boolean;
+}
+
 export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext }: ScopeMatrixProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [itemsWithMissingQty, setItemsWithMissingQty] = useState<Set<string>>(new Set());
   const [showSuggestedSystems, setShowSuggestedSystems] = useState(false);
@@ -41,6 +49,12 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   const { currentOrganisation } = useOrganisation();
   const organisationId = currentOrganisation?.id || '';
   const { suggestions } = useSuggestedSystems(projectId);
+
+  const [availableQuotes, setAvailableQuotes] = useState<QuoteInfo[]>([]);
+  const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
+  const [quotesLoading, setQuotesLoading] = useState(true);
 
   const [filters, setFilters] = useState<MatrixFilters>({});
   const [availableFilters, setAvailableFilters] = useState({
@@ -62,21 +76,66 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   });
 
   useEffect(() => {
-    loadData();
+    loadAvailableQuotes();
   }, [projectId]);
 
   useEffect(() => {
     buildMatrix();
   }, [comparisonData, filters]);
 
+  const loadAvailableQuotes = async () => {
+    setQuotesLoading(true);
+    try {
+      const { data: quotesData } = await supabase
+        .from('quotes')
+        .select('id, supplier_name, quote_reference, total_amount')
+        .eq('project_id', projectId)
+        .order('supplier_name');
+
+      if (quotesData) {
+        const quotesWithStatus = await Promise.all(
+          quotesData.map(async (quote) => {
+            const { count } = await supabase
+              .from('quote_items')
+              .select('*', { count: 'exact', head: true })
+              .eq('quote_id', quote.id)
+              .not('system_id', 'is', null);
+
+            return {
+              ...quote,
+              is_normalized: (count || 0) > 0,
+            };
+          })
+        );
+
+        setAvailableQuotes(quotesWithStatus);
+      }
+    } catch (error) {
+      console.error('Error loading quotes:', error);
+    } finally {
+      setQuotesLoading(false);
+    }
+  };
+
+  const handleGenerateMatrix = async () => {
+    if (selectedQuoteIds.length === 0) return;
+
+    setIsGenerating(true);
+    await loadData();
+    setHasGenerated(true);
+    setIsGenerating(false);
+  };
+
   const loadData = async () => {
     setLoading(true);
 
     try {
+      const quoteIdsToLoad = selectedQuoteIds.length > 0 ? selectedQuoteIds : availableQuotes.map(q => q.id);
+
       const { data: quotesData } = await supabase
         .from('quotes')
         .select('id, supplier_name')
-        .eq('project_id', projectId)
+        .in('id', quoteIdsToLoad)
         .order('supplier_name');
 
       if (!quotesData || quotesData.length === 0) {
@@ -347,32 +406,166 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
 
   const hasActiveFilters = Object.values(filters).some(v => v);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading scope matrix...</div>
-      </div>
+  const handleToggleQuote = (quoteId: string) => {
+    setSelectedQuoteIds(prev =>
+      prev.includes(quoteId)
+        ? prev.filter(id => id !== quoteId)
+        : [...prev, quoteId]
     );
-  }
+  };
 
-  if (comparisonData.length === 0) {
-    console.log('ScopeMatrix: No comparison data available');
-    console.log('ScopeMatrix: Check console for data loading logs above');
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-        <p className="text-gray-500 text-lg">No comparison data available.</p>
-        <p className="text-gray-400 mt-2">
-          Please ensure quotes have been imported, normalized, and mapped to systems.
-        </p>
-        <p className="text-gray-400 mt-2 text-sm">
-          Go to Review & Clean and click "Process All Quotes" to prepare data for the scope matrix.
-        </p>
-      </div>
-    );
-  }
+  const handleSelectAll = () => {
+    const eligibleQuotes = availableQuotes.filter(q => q.is_normalized);
+    if (selectedQuoteIds.length === eligibleQuotes.length) {
+      setSelectedQuoteIds([]);
+    } else {
+      setSelectedQuoteIds(eligibleQuotes.map(q => q.id));
+    }
+  };
+
+  const eligibleQuotes = availableQuotes.filter(q => q.is_normalized);
+  const allSelected = eligibleQuotes.length > 0 && selectedQuoteIds.length === eligibleQuotes.length;
 
   return (
-    <div className="space-y-4">
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="mb-6">
+          <button
+            onClick={onNavigateBack}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Back to Project Dashboard
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Scope Matrix</h1>
+          <p className="text-gray-600">Select which supplier quotes to compare and generate your scope matrix.</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Only quotes that have been imported, normalised, and mapped to systems will be available here.
+          </p>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900">Select Quotes to Compare</h2>
+            {eligibleQuotes.length > 0 && (
+              <button
+                onClick={handleSelectAll}
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {allSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
+          </div>
+
+          {quotesLoading ? (
+            <div className="text-center py-8 text-gray-500">Loading quotes...</div>
+          ) : availableQuotes.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-2">No quotes found for this project.</p>
+              <p className="text-sm text-gray-400">Import quotes first to use the scope matrix.</p>
+            </div>
+          ) : eligibleQuotes.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-2">No ready quotes found.</p>
+              <p className="text-sm text-gray-400">
+                Go to{' '}
+                <button onClick={() => {}} className="text-blue-600 hover:text-blue-700 underline">
+                  Review & Clean
+                </button>{' '}
+                and click "Process All Quotes" first.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {availableQuotes.map((quote) => (
+                <button
+                  key={quote.id}
+                  onClick={() => quote.is_normalized && handleToggleQuote(quote.id)}
+                  disabled={!quote.is_normalized}
+                  className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all text-left ${
+                    quote.is_normalized
+                      ? selectedQuoteIds.includes(quote.id)
+                        ? 'bg-blue-50 border-blue-300 hover:bg-blue-100'
+                        : 'bg-white border-gray-200 hover:bg-gray-50'
+                      : 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex-shrink-0">
+                    {quote.is_normalized && selectedQuoteIds.includes(quote.id) ? (
+                      <CheckSquare className="text-blue-600" size={20} />
+                    ) : (
+                      <Square className="text-gray-400" size={20} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900">{quote.supplier_name}</div>
+                    {quote.quote_reference && (
+                      <div className="text-sm text-gray-500">{quote.quote_reference}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {quote.total_amount && (
+                      <div className="text-sm font-medium text-gray-700">
+                        ${quote.total_amount.toLocaleString()}
+                      </div>
+                    )}
+                    <div>
+                      {quote.is_normalized ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Ready
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          Pending mapping
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+            <div className="text-sm text-gray-600">
+              {selectedQuoteIds.length} {selectedQuoteIds.length === 1 ? 'quote' : 'quotes'} selected
+            </div>
+            <button
+              onClick={handleGenerateMatrix}
+              disabled={selectedQuoteIds.length === 0 || isGenerating}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? 'Building Matrix...' : 'Generate Scope Matrix'}
+            </button>
+          </div>
+        </div>
+
+        {!hasGenerated && !loading && (
+          <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm text-center">
+            <p className="text-gray-500">
+              Select one or more quotes above and click "Generate Scope Matrix" to view the comparison.
+            </p>
+          </div>
+        )}
+
+        {loading && (
+          <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm text-center">
+            <div className="text-gray-500">Building scope matrix...</div>
+          </div>
+        )}
+
+        {hasGenerated && !loading && comparisonData.length === 0 && (
+          <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm text-center">
+            <p className="text-gray-500 text-lg mb-2">No comparison data available for the selected quotes.</p>
+            <p className="text-gray-400">
+              Please check that the quotes are fully normalised and mapped in Review & Clean.
+            </p>
+          </div>
+        )}
+
+        {hasGenerated && !loading && comparisonData.length > 0 && (
+          <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
@@ -646,13 +839,16 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         </div>
       </div>
 
-      <WorkflowNav
-        currentStep={4}
-        onBack={onNavigateBack}
-        onNext={onNavigateNext}
-        backLabel="Back: Quote Intelligence"
-        nextLabel="Next: Equalisation"
-      />
+            <WorkflowNav
+              currentStep={4}
+              onBack={onNavigateBack}
+              onNext={onNavigateNext}
+              backLabel="Back: Quote Intelligence"
+              nextLabel="Next: Equalisation"
+            />
+          </div>
+        )}
+      </div>
 
       {showSuggestedSystems && (
         <SuggestedSystemsPanel
