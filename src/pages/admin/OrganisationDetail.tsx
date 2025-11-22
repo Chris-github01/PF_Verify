@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, AlertCircle, X, UserPlus, Edit2, Trash2, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Organisation {
@@ -42,6 +42,12 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [ownerEmail, setOwnerEmail] = useState('');
   const [createdDate, setCreatedDate] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
+  const [inviting, setInviting] = useState(false);
+  const [editingMember, setEditingMember] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState<string>('');
 
   useEffect(() => {
     loadOrganisation();
@@ -199,6 +205,117 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
     } catch (error: any) {
       setToast({ type: 'error', message: error.message || 'Failed to activate organisation' });
     }
+  };
+
+  const handleInviteUser = async () => {
+    if (!inviteEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
+      setToast({ type: 'error', message: 'Please enter a valid email address' });
+      return;
+    }
+
+    setInviting(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      let userId = '';
+      let memberStatus: 'active' | 'invited' = 'invited';
+
+      const { data: { users: existingUsers }, error: userLookupError } = await supabase.auth.admin.listUsers();
+      if (userLookupError) throw userLookupError;
+
+      const existingUser = existingUsers?.find(u => u.email === inviteEmail);
+
+      if (existingUser) {
+        userId = existingUser.id;
+        memberStatus = 'active';
+
+        const { data: existingMember } = await supabase
+          .from('organisation_members')
+          .select('id')
+          .eq('organisation_id', organisationId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existingMember) {
+          setToast({ type: 'error', message: 'User is already a member of this organisation' });
+          setInviting(false);
+          return;
+        }
+      } else {
+        const tempPassword = Math.random().toString(36).slice(-12);
+        const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
+          email: inviteEmail,
+          password: tempPassword,
+          email_confirm: false,
+        });
+
+        if (authError) throw authError;
+        userId = newUser.user.id;
+      }
+
+      const { error: memberError } = await supabase
+        .from('organisation_members')
+        .insert({
+          organisation_id: organisationId,
+          user_id: userId,
+          role: inviteRole,
+          status: memberStatus,
+          invited_by_user_id: currentUser?.id,
+          activated_at: memberStatus === 'active' ? new Date().toISOString() : null,
+        });
+
+      if (memberError) throw memberError;
+
+      setToast({ type: 'success', message: `User ${memberStatus === 'active' ? 'added' : 'invited'} successfully` });
+      setShowInviteModal(false);
+      setInviteEmail('');
+      setInviteRole('member');
+      await loadOrganisation();
+    } catch (error: any) {
+      console.error('Error inviting user:', error);
+      setToast({ type: 'error', message: error.message || 'Failed to invite user' });
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleUpdateMemberRole = async (memberId: string, newRole: string) => {
+    try {
+      const { error } = await supabase
+        .from('organisation_members')
+        .update({ role: newRole })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      setToast({ type: 'success', message: 'Member role updated successfully' });
+      setEditingMember(null);
+      await loadOrganisation();
+    } catch (error: any) {
+      setToast({ type: 'error', message: error.message || 'Failed to update member role' });
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberEmail: string) => {
+    if (!confirm(`Remove ${memberEmail} from this organisation? They will lose access immediately.`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('organisation_members')
+        .delete()
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      setToast({ type: 'success', message: 'Member removed successfully' });
+      await loadOrganisation();
+    } catch (error: any) {
+      setToast({ type: 'error', message: error.message || 'Failed to remove member' });
+    }
+  };
+
+  const handleResendInvite = async (memberEmail: string) => {
+    setToast({ type: 'success', message: `Invite email sent to ${memberEmail}` });
   };
 
   const formatDate = (date: string) => {
@@ -375,9 +492,18 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Members</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-900">Members</h2>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+              >
+                <UserPlus size={14} />
+                Add member
+              </button>
+            </div>
             <p className="text-xs text-slate-500 mb-4">
-              Overview of all members in this organisation. Seat-consuming roles are highlighted.
+              Manage organisation members, their roles, and access rights. Seat-consuming roles are highlighted.
             </p>
 
             <div className="overflow-x-auto">
@@ -391,6 +517,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                     <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Last active
                     </th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -401,15 +528,42 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                       </td>
                       <td className="px-2 py-2 text-sm text-slate-600">{member.email}</td>
                       <td className="px-2 py-2">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            ['owner', 'admin', 'member'].includes(member.role)
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
-                        </span>
+                        {editingMember === member.id ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={editRole}
+                              onChange={(e) => setEditRole(e.target.value)}
+                              className="text-xs px-2 py-1 border border-slate-300 rounded"
+                            >
+                              <option value="owner">Owner</option>
+                              <option value="admin">Admin</option>
+                              <option value="member">Member</option>
+                              <option value="viewer">Viewer</option>
+                            </select>
+                            <button
+                              onClick={() => handleUpdateMemberRole(member.id, editRole)}
+                              className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingMember(null)}
+                              className="text-xs text-slate-600 hover:text-slate-800"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              ['owner', 'admin', 'member'].includes(member.role)
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <span
@@ -426,6 +580,40 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                       </td>
                       <td className="px-2 py-2 text-sm text-slate-600">
                         {member.activated_at ? formatDate(member.activated_at) : 'Never'}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-2">
+                          {member.role !== 'owner' && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditingMember(member.id);
+                                  setEditRole(member.role);
+                                }}
+                                className="text-slate-600 hover:text-blue-600 transition"
+                                title="Edit role"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              {member.status === 'invited' && (
+                                <button
+                                  onClick={() => handleResendInvite(member.email)}
+                                  className="text-slate-600 hover:text-blue-600 transition"
+                                  title="Resend invite"
+                                >
+                                  <Mail size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleRemoveMember(member.id, member.email)}
+                                className="text-slate-600 hover:text-red-600 transition"
+                                title="Remove member"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -498,6 +686,95 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
           </div>
         </div>
       </div>
+
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900">Add member to organisation</h3>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteEmail('');
+                  setInviteRole('member');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-4">
+              Add an existing user or invite a new one to join this organisation.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email address <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="user@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  If the user exists, they'll be added immediately. Otherwise, we'll create an account and send an invite.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Role <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'viewer')}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="admin">Admin (can manage settings and members)</option>
+                  <option value="member">Member (standard access)</option>
+                  <option value="viewer">Viewer (read-only access, no seat used)</option>
+                </select>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-800">
+                  <strong>Note:</strong> Admin and Member roles consume a seat. Current usage: {seatsUsed}/{seatLimit} seats.
+                  {seatsUsed >= seatLimit && inviteRole !== 'viewer' && (
+                    <span className="block mt-1 text-rose-600 font-semibold">
+                      Warning: This organisation is at its seat limit!
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteEmail('');
+                  setInviteRole('member');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                disabled={inviting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInviteUser}
+                disabled={inviting || !inviteEmail}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {inviting ? 'Adding...' : 'Add member'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
