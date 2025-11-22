@@ -1,4 +1,4 @@
-import { Building2, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
+import { Building2, AlertCircle, Loader2, ChevronDown, Shield } from 'lucide-react';
 import { useOrganisation } from '../lib/organisationContext';
 import { useState } from 'react';
 
@@ -7,7 +7,7 @@ interface OrganisationPickerProps {
 }
 
 export default function OrganisationPicker({ onOrganisationSelected }: OrganisationPickerProps) {
-  const { organisations, setCurrentOrganisation, loading } = useOrganisation();
+  const { organisations, setCurrentOrganisation, loading, isAdminView } = useOrganisation();
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [error, setError] = useState('');
 
@@ -41,6 +41,12 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
           <Building2 className="mx-auto mb-4 text-blue-600" size={48} />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Select Organisation</h1>
           <p className="text-gray-600">Choose which organisation to work with</p>
+          {isAdminView && (
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full">
+              <Shield size={14} />
+              Admin view: showing all organisations
+            </div>
+          )}
         </div>
 
         {organisations.length > 0 ? (

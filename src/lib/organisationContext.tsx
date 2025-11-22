@@ -13,6 +13,7 @@ interface OrganisationContextType {
   currentOrganisation: Organisation | null;
   organisations: Organisation[];
   loading: boolean;
+  isAdminView: boolean;
   setCurrentOrganisation: (org: Organisation | null) => void;
   refreshOrganisations: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -24,6 +25,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   const [currentOrganisation, setCurrentOrganisation] = useState<Organisation | null>(null);
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdminView, setIsAdminView] = useState(false);
 
   useEffect(() => {
     loadOrganisations();
@@ -68,18 +70,48 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    let orgs = null;
+    let orgsError = null;
+
     if (!memberships || memberships.length === 0) {
-      setOrganisations([]);
-      setLoading(false);
-      return;
+      // Check if user is a platform admin
+      const { data: adminCheck } = await supabase
+        .from('platform_admins')
+        .select('is_active')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (adminCheck) {
+        // Admin fallback: show all organisations
+        const result = await supabase
+          .from('organisations')
+          .select('id, name, created_at, settings, status')
+          .order('created_at', { ascending: false });
+
+        orgs = result.data;
+        orgsError = result.error;
+        setIsAdminView(true);
+      } else {
+        // Not an admin and no memberships
+        setOrganisations([]);
+        setIsAdminView(false);
+        setLoading(false);
+        return;
+      }
+    } else {
+      // User has memberships, load their organisations
+      const orgIds = memberships.map(m => m.organisation_id);
+
+      const result = await supabase
+        .from('organisations')
+        .select('id, name, created_at, settings, status')
+        .in('id', orgIds);
+
+      orgs = result.data;
+      orgsError = result.error;
+      setIsAdminView(false);
     }
-
-    const orgIds = memberships.map(m => m.organisation_id);
-
-    const { data: orgs, error: orgsError } = await supabase
-      .from('organisations')
-      .select('id, name, created_at, settings, status')
-      .in('id', orgIds);
 
     if (orgsError) {
       console.error('Error loading organisations:', orgsError);
@@ -131,6 +163,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         currentOrganisation,
         organisations,
         loading,
+        isAdminView,
         setCurrentOrganisation: handleSetCurrentOrganisation,
         refreshOrganisations,
         hasPermission,
