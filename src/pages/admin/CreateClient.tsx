@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle } from 'lucide-react';
-import { createOrganisation } from '../../lib/admin/adminApi';
+import { ArrowLeft, CheckCircle, DollarSign } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { ALL_TRADES, TRADE_LABELS } from '../../lib/admin/adminApi';
 import PageHeader from '../../components/PageHeader';
 
 export default function CreateClient() {
   const [formData, setFormData] = useState({
     name: '',
-    tradeType: 'passive_fire',
+    selectedTrades: ['passive_fire'] as string[],
     trialDays: 14,
     ownerEmail: ''
   });
@@ -17,22 +18,66 @@ export default function CreateClient() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const calculateRevenue = (trades: string[]) => {
+    const total = trades.reduce((sum, trade) => {
+      const tradeInfo = ALL_TRADES.find(t => t.value === trade);
+      return sum + (tradeInfo?.price || 0);
+    }, 0);
+
+    if (trades.length === 2) return total * 0.85; // 15% off
+    if (trades.length === 3) return total * 0.75; // 25% off
+    if (trades.length >= 4) return total * 0.65; // 35% off
+    return total;
+  };
+
+  const toggleTrade = (trade: string) => {
+    if (formData.selectedTrades.includes(trade)) {
+      if (formData.selectedTrades.length === 1) return; // Must have at least one
+      setFormData({
+        ...formData,
+        selectedTrades: formData.selectedTrades.filter(t => t !== trade)
+      });
+    } else {
+      setFormData({
+        ...formData,
+        selectedTrades: [...formData.selectedTrades, trade]
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     setError(null);
 
     try {
-      const result = await createOrganisation({
-        name: formData.name,
-        tradeType: formData.tradeType,
-        trialDays: formData.trialDays,
-        ownerEmail: formData.ownerEmail
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user.email) throw new Error('Not authenticated');
+
+      // Create organisation via RPC
+      const { data: orgData, error: orgError } = await supabase.rpc('admin_create_client_organisation', {
+        p_admin_email: session.user.email,
+        p_org_name: formData.name,
+        p_trade_type: formData.selectedTrades[0], // Primary trade
+        p_trial_days: formData.trialDays,
+        p_owner_email: formData.ownerEmail
       });
 
+      if (orgError) throw orgError;
+
+      const orgId = orgData.organisation_id;
+
+      // Update licensed_trades array directly
+      const { error: updateError } = await supabase
+        .from('organisations')
+        .update({ licensed_trades: formData.selectedTrades })
+        .eq('id', orgId);
+
+      if (updateError) throw updateError;
+
       setSuccess({
-        organisationId: result.organisationId,
-        message: result.message
+        organisationId: orgId,
+        message: orgData.message
       });
     } catch (err) {
       console.error('Failed to create organisation:', err);
@@ -41,6 +86,13 @@ export default function CreateClient() {
       setCreating(false);
     }
   };
+
+  const monthlyRevenue = calculateRevenue(formData.selectedTrades);
+  const fullPrice = formData.selectedTrades.reduce((sum, trade) => {
+    const tradeInfo = ALL_TRADES.find(t => t.value === trade);
+    return sum + (tradeInfo?.price || 0);
+  }, 0);
+  const savings = fullPrice - monthlyRevenue;
 
   if (success) {
     return (
@@ -72,12 +124,18 @@ export default function CreateClient() {
                 <span className="font-medium text-gray-900">{formData.ownerEmail}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Trade:</span>
-                <span className="font-medium text-gray-900">
-                  {formData.tradeType === 'passive_fire' && 'PassiveFire Verify+'}
-                  {formData.tradeType === 'electrical' && 'Electrical Verify+'}
-                  {formData.tradeType === 'plumbing' && 'Plumbing Verify+'}
-                </span>
+                <span className="text-gray-600">Licensed Trades:</span>
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {formData.selectedTrades.map(trade => (
+                    <span key={trade} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                      {TRADE_LABELS[trade]?.replace(' Verify+', '')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Monthly Revenue:</span>
+                <span className="text-lg font-bold text-green-600">${monthlyRevenue.toFixed(0)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Trial Length:</span>
@@ -90,8 +148,8 @@ export default function CreateClient() {
               <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
                 <li>Owner must sign up at the app using: <strong>{formData.ownerEmail}</strong></li>
                 <li>They'll be automatically added to this organisation</li>
-                <li>A default project has been created</li>
-                <li>They can start uploading quotes immediately</li>
+                <li>During trial: All {formData.selectedTrades.length} trades are accessible</li>
+                <li>After trial: Pay ${monthlyRevenue.toFixed(0)}/month to keep licenses active</li>
               </ol>
             </div>
 
@@ -107,7 +165,7 @@ export default function CreateClient() {
                   setSuccess(null);
                   setFormData({
                     name: '',
-                    tradeType: 'passive_fire',
+                    selectedTrades: ['passive_fire'],
                     trialDays: 14,
                     ownerEmail: ''
                   });
@@ -134,7 +192,7 @@ export default function CreateClient() {
         </button>
         <PageHeader
           title="Create New Client"
-          subtitle="Set up a new organisation in under 15 seconds"
+          subtitle="Set up a new organisation with multi-trade licensing in under 15 seconds"
         />
       </div>
 
@@ -144,7 +202,7 @@ export default function CreateClient() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-2xl">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-3xl">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -161,23 +219,86 @@ export default function CreateClient() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Trade / Product *
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Licensed Trades * <span className="text-gray-500 font-normal">(select all that apply)</span>
             </label>
-            <select
-              value={formData.tradeType}
-              onChange={(e) => setFormData({ ...formData, tradeType: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="passive_fire">PassiveFire Verify+</option>
-              <option value="electrical">Electrical Verify+</option>
-              <option value="plumbing">Plumbing Verify+</option>
-              <option value="mechanical">Mechanical Verify+</option>
-              <option value="other">Other</option>
-            </select>
-            <p className="mt-1 text-sm text-gray-500">
-              This determines which ontology and templates are auto-seeded
+            <div className="grid grid-cols-2 gap-3">
+              {ALL_TRADES.map(trade => {
+                const isSelected = formData.selectedTrades.includes(trade.value);
+                return (
+                  <button
+                    key={trade.value}
+                    type="button"
+                    onClick={() => toggleTrade(trade.value)}
+                    disabled={isSelected && formData.selectedTrades.length === 1}
+                    className={`p-4 border-2 rounded-lg text-left transition-all ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                        : 'border-gray-200 hover:border-blue-300'
+                    } ${isSelected && formData.selectedTrades.length === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className={`w-4 h-4 rounded-full ${
+                        trade.color === 'orange' ? 'bg-orange-500' :
+                        trade.color === 'yellow' ? 'bg-yellow-500' :
+                        trade.color === 'blue' ? 'bg-blue-500' :
+                        'bg-green-500'
+                      }`}></div>
+                      <div className="font-medium text-gray-900">{trade.label}</div>
+                      {isSelected && (
+                        <CheckCircle size={16} className="ml-auto text-blue-600" />
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-600">${trade.price}/month</div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Client can access all selected trades during trial. After trial, they pay for what they keep.
             </p>
+          </div>
+
+          <div className="bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <DollarSign className="text-green-600" size={24} />
+              <h3 className="font-bold text-green-900">Revenue Calculator</h3>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-green-800">Base Price ({formData.selectedTrades.length} trades):</span>
+                <span className="font-medium text-green-900">${fullPrice}/month</span>
+              </div>
+
+              {formData.selectedTrades.length >= 2 && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-800">
+                      Bundle Discount (
+                      {formData.selectedTrades.length === 2 && '15%'}
+                      {formData.selectedTrades.length === 3 && '25%'}
+                      {formData.selectedTrades.length >= 4 && '35%'}
+                      ):
+                    </span>
+                    <span className="font-medium text-green-600">-${savings.toFixed(0)}</span>
+                  </div>
+                  <div className="h-px bg-green-300 my-2"></div>
+                </>
+              )}
+
+              <div className="flex justify-between">
+                <span className="font-bold text-green-900">Monthly Revenue:</span>
+                <span className="text-2xl font-bold text-green-900">${monthlyRevenue.toFixed(0)}</span>
+              </div>
+
+              <div className="text-xs text-green-700 mt-2">
+                {formData.selectedTrades.length === 1 && 'Select another trade for 15% bundle discount'}
+                {formData.selectedTrades.length === 2 && 'Select one more trade for 25% bundle discount (10% more savings)'}
+                {formData.selectedTrades.length === 3 && 'Select all trades for 35% bundle discount'}
+                {formData.selectedTrades.length >= 4 && 'Maximum bundle discount applied!'}
+              </div>
+            </div>
           </div>
 
           <div>
@@ -222,10 +343,10 @@ export default function CreateClient() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-semibold text-blue-900 mb-2">What happens next:</h3>
             <ul className="list-disc list-inside space-y-1 text-sm text-blue-800">
-              <li>Organisation created instantly</li>
-              <li>Default project set up</li>
-              <li>Owner receives instructions (manual for now)</li>
-              <li>Ready to upload quotes immediately</li>
+              <li>Organisation created with {formData.selectedTrades.length} licensed trade{formData.selectedTrades.length > 1 ? 's' : ''}</li>
+              <li>Default project set up for primary trade</li>
+              <li>Owner can sign up and access all {formData.selectedTrades.length} trades during trial</li>
+              <li>After trial: ${monthlyRevenue.toFixed(0)}/month to keep licenses active</li>
             </ul>
           </div>
 
@@ -242,7 +363,7 @@ export default function CreateClient() {
               disabled={creating}
               className="flex-1 px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {creating ? 'Creating...' : 'Create Client'}
+              {creating ? 'Creating...' : `Create Client ($${monthlyRevenue.toFixed(0)}/mo)`}
             </button>
           </div>
         </form>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Sparkles, AlertTriangle, X } from 'lucide-react';
 import { isImpersonating, stopImpersonation } from './lib/admin/adminApi';
+import TradeUpsellBanner from './components/TradeUpsellBanner';
 import Sidebar, { SidebarTab } from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import NewProjectDashboard from './pages/NewProjectDashboard';
@@ -50,6 +51,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
   const { currentOrganisation, organisations, loading: orgLoading, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
 
@@ -94,8 +96,30 @@ function AppContent() {
   useEffect(() => {
     if (currentOrganisation) {
       initializeApp();
+      loadOrgLicensing();
     }
   }, [currentOrganisation]);
+
+  const loadOrgLicensing = async () => {
+    if (!currentOrganisation) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('organisations')
+        .select('licensed_trades, subscription_status')
+        .eq('id', currentOrganisation.id)
+        .single();
+
+      if (!error && data) {
+        setOrgLicensing({
+          licensed_trades: data.licensed_trades || [],
+          subscription_status: data.subscription_status || 'trial'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load org licensing:', err);
+    }
+  };
 
   useEffect(() => {
     if (projectId) {
@@ -628,6 +652,13 @@ function AppContent() {
               Exit Admin Mode
             </button>
           </div>
+        )}
+
+        {!isInAdminMode && orgLicensing && orgLicensing.licensed_trades && (
+          <TradeUpsellBanner
+            currentTrades={orgLicensing.licensed_trades}
+            subscriptionStatus={orgLicensing.subscription_status}
+          />
         )}
 
         <DashboardHeader
