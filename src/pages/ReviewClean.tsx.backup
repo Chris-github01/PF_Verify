@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/normaliser/unitNormaliser';
 import { extractAttributes } from '../lib/normaliser/attributeExtractor';
@@ -8,7 +8,6 @@ import { matchLineToSystem } from '../lib/mapping/systemMatcher';
 import { getAllSystemLabels } from '../lib/mapping/systemTemplates';
 import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
-import { getStatusColor, getStatusLabel, type QuoteStatus } from '../lib/quoteProcessing/quotePipeline';
 
 interface Quote {
   id: string;
@@ -461,78 +460,22 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
     }
   };
 
-  const handleCleanAndMapSelectedQuote = async () => {
-    if (!selectedQuote) return;
-    if (normalising || mapping || smartCleaning) return;
-
-    const quoteData = quotes.find(q => q.id === selectedQuote);
-    if (!quoteData) return;
-
-    setSmartCleaning(true);
-    setMessage({ type: 'info', text: `Processing "${quoteData.supplier_name}"...` });
-
-    try {
-      await supabase
-        .from('quotes')
-        .update({ status: 'processing', processing_started_at: new Date().toISOString() })
-        .eq('id', selectedQuote);
-
-      await smartClean(items);
-
-      await supabase
-        .from('quotes')
-        .update({ status: 'ready', processing_completed_at: new Date().toISOString() })
-        .eq('id', selectedQuote);
-
-      await loadQuotes();
-      setMessage({ type: 'success', text: `"${quoteData.supplier_name}" processed successfully!` });
-    } catch (error) {
-      console.error('Clean & Map error:', error);
-      await supabase
-        .from('quotes')
-        .update({
-          status: 'error',
-          processing_error: error instanceof Error ? error.message : 'Unknown error',
-          processing_completed_at: new Date().toISOString()
-        })
-        .eq('id', selectedQuote);
-
-      await loadQuotes();
-      setMessage({ type: 'error', text: `Failed to process "${quoteData.supplier_name}"` });
-    } finally {
-      setSmartCleaning(false);
-    }
-  };
-
-  const handleProcessAllPendingQuotes = async () => {
+  const processAllQuotes = async () => {
     if (normalising || mapping || smartCleaning || processingAllQuotes) return;
+    if (quotes.length === 0) return;
 
-    const pendingQuotes = quotes.filter(q =>
-      q.status === 'imported' || q.status === 'pending' || q.status === 'error'
-    );
-
-    if (pendingQuotes.length === 0) {
-      setMessage({ type: 'info', text: 'No pending quotes to process.' });
-      return;
-    }
-
-    console.log('========== PROCESS PENDING QUOTES STARTED ==========');
-    console.log('Processing', pendingQuotes.length, 'pending quotes');
+    console.log('========== PROCESS ALL QUOTES STARTED ==========');
+    console.log('Processing', quotes.length, 'quotes');
 
     setProcessingAllQuotes(true);
 
     try {
-      for (let i = 0; i < pendingQuotes.length; i++) {
-        const quote = pendingQuotes[i];
-        console.log(`\n--- Processing quote ${i + 1}/${pendingQuotes.length}: ${quote.supplier_name} ---`);
-        setMessage({ type: 'info', text: `Processing quote ${i + 1}/${pendingQuotes.length}: ${quote.supplier_name}` });
+      for (let i = 0; i < quotes.length; i++) {
+        const quote = quotes[i];
+        console.log(`\n--- Processing quote ${i + 1}/${quotes.length}: ${quote.supplier_name} ---`);
+        setMessage({ type: 'info', text: `Processing quote ${i + 1}/${quotes.length}: ${quote.supplier_name}` });
 
         setSelectedQuote(quote.id);
-
-        await supabase
-          .from('quotes')
-          .update({ status: 'processing', processing_started_at: new Date().toISOString() })
-          .eq('id', quote.id);
 
         const { data: quoteItems } = await supabase
           .from('quote_items')
@@ -542,10 +485,6 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
         if (!quoteItems || quoteItems.length === 0) {
           console.warn(`No items found for quote ${quote.supplier_name}`);
-          await supabase
-            .from('quotes')
-            .update({ status: 'error', processing_error: 'No items found' })
-            .eq('id', quote.id);
           continue;
         }
 
@@ -554,42 +493,26 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
         try {
           await smartClean(quoteItems);
-          await supabase
-            .from('quotes')
-            .update({ status: 'ready', processing_completed_at: new Date().toISOString() })
-            .eq('id', quote.id);
           console.log('Successfully processed quote:', quote.supplier_name);
         } catch (error) {
           console.error(`Processing failed for quote ${quote.supplier_name}:`, error);
-          await supabase
-            .from('quotes')
-            .update({
-              status: 'error',
-              processing_error: error instanceof Error ? error.message : 'Unknown error',
-              processing_completed_at: new Date().toISOString()
-            })
-            .eq('id', quote.id);
         }
       }
 
-      console.log('\n========== PROCESS PENDING QUOTES COMPLETE ==========');
+      console.log('\n========== PROCESS ALL QUOTES COMPLETE ==========');
 
       if (selectedQuote) {
         await loadItems(selectedQuote);
       }
       await loadQuotes();
 
-      setMessage({ type: 'success', text: `All ${pendingQuotes.length} pending quotes processed.` });
+      setMessage({ type: 'success', text: 'All quotes processed successfully.' });
     } catch (error) {
-      console.error('Process All Pending error:', error);
+      console.error('Process All Quotes error:', error);
       setMessage({ type: 'error', text: 'Failed to process all quotes. Some quotes may have been processed.' });
     } finally {
       setProcessingAllQuotes(false);
     }
-  };
-
-  const processAllQuotes = async () => {
-    await handleProcessAllPendingQuotes();
   };
 
   const handleSystemOverride = async (itemId: string, systemId: string) => {
@@ -834,8 +757,13 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
                         <span className="text-sm font-medium text-gray-900">
                           ${quote.total_amount.toLocaleString()}
                         </span>
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(quote.status as QuoteStatus)}`}>
-                          {getStatusLabel(quote.status as QuoteStatus)}
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                          quote.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          quote.status === 'reviewed' ? 'bg-blue-100 text-blue-800' :
+                          quote.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {quote.status}
                         </span>
                       </div>
                     </div>
@@ -857,37 +785,44 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
         <div className="col-span-9">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Review & Clean {selectedQuoteData && `– ${selectedQuoteData.supplier_name}`}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Normalise, clean and map items for this supplier quote.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCleanAndMapSelectedQuote}
-                    disabled={smartCleaning || normalising || mapping || !selectedQuote || items.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
-                    title="Run normalisation and mapping for this quote"
-                  >
-                    <Play size={16} />
-                    {smartCleaning ? 'Processing...' : 'Clean & Map Quote'}
-                  </button>
-                  <button
-                    onClick={handleProcessAllPendingQuotes}
-                    disabled={processingAllQuotes || normalising || mapping || smartCleaning || quotes.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    title="Process all pending/error quotes"
-                  >
-                    <Zap size={14} />
-                    {processingAllQuotes ? 'Processing...' : 'Run for All Pending'}
-                  </button>
-                </div>
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Quote Items</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={normaliseAllItems}
+                  disabled={normalising || items.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  <Wand2 size={18} />
+                  {normalising ? 'Normalising...' : 'Normalise All'}
+                </button>
+                <button
+                  onClick={smartClean}
+                  disabled={smartCleaning || normalising || mapping || items.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  title="Runs Normalise All and Map Systems together in one step"
+                >
+                  <Sparkles size={18} />
+                  {smartCleaning ? 'Smart Cleaning...' : '⭐ Smart Clean'}
+                </button>
+                <button
+                  onClick={mapAllItemsToSystems}
+                  disabled={mapping || items.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  <Target size={18} />
+                  {mapping ? 'Mapping...' : 'Map Systems'}
+                </button>
+                <div className="border-l border-gray-300 h-8 mx-2"></div>
+                <button
+                  onClick={processAllQuotes}
+                  disabled={processingAllQuotes || normalising || mapping || smartCleaning || quotes.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  title="Process all quotes sequentially with normalise, clean, and map"
+                >
+                  <Zap size={18} />
+                  {processingAllQuotes ? 'Processing All...' : 'Process All Quotes'}
+                </button>
               </div>
             </div>
             <div className="overflow-x-auto">
