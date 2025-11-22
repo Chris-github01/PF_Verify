@@ -36,6 +36,11 @@ interface QuoteInfo {
   total_amount?: number;
   is_normalized: boolean;
   items_count: number;
+  status?: string;
+}
+
+function isScopeMatrixReady(quote: QuoteInfo): boolean {
+  return quote.is_normalized && quote.items_count > 0;
 }
 
 export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext }: ScopeMatrixProps) {
@@ -454,16 +459,16 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   };
 
   const handleSelectAll = () => {
-    const eligibleQuotes = availableQuotes.filter(q => q.is_normalized);
-    if (selectedQuoteIds.length === eligibleQuotes.length) {
+    const readyQuotes = availableQuotes.filter(isScopeMatrixReady);
+    if (selectedQuoteIds.length === readyQuotes.length) {
       setSelectedQuoteIds([]);
     } else {
-      setSelectedQuoteIds(eligibleQuotes.map(q => q.id));
+      setSelectedQuoteIds(readyQuotes.map(q => q.id));
     }
   };
 
-  const eligibleQuotes = availableQuotes.filter(q => q.is_normalized);
-  const allSelected = eligibleQuotes.length > 0 && selectedQuoteIds.length === eligibleQuotes.length;
+  const readyQuotes = availableQuotes.filter(isScopeMatrixReady);
+  const allSelected = readyQuotes.length > 0 && selectedQuoteIds.length === readyQuotes.length;
 
   return (
     <div className="min-h-screen">
@@ -483,7 +488,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Supplier Quotes</h2>
-            {eligibleQuotes.length > 0 && (
+            {readyQuotes.length > 0 && (
               <button
                 onClick={handleSelectAll}
                 className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium"
@@ -494,41 +499,52 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
             )}
           </div>
 
+          {availableQuotes.length > readyQuotes.length && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <div className="flex items-start gap-2">
+                <Info size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="text-blue-800">
+                  {availableQuotes.length - readyQuotes.length} quote(s) are not ready for comparison.
+                  Fix imports in <a href="#/import-quotes" className="underline font-medium">Import Quotes</a> or{' '}
+                  <a href="#/review-clean" className="underline font-medium">Review & Clean</a>.
+                </div>
+              </div>
+            </div>
+          )}
+
           {quotesLoading ? (
             <div className="text-center py-8 text-gray-500 text-sm">Loading quotes...</div>
-          ) : availableQuotes.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600 mb-2">No quotes found for this project.</p>
-              <p className="text-sm text-gray-500">Import quotes first to use the scope matrix.</p>
-            </div>
-          ) : eligibleQuotes.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600 mb-2">No ready quotes found.</p>
-              <p className="text-sm text-gray-500">
-                Go to Review & Clean and process quotes first.
+          ) : readyQuotes.length === 0 ? (
+            <div className="text-center py-12">
+              <AlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No quotes ready for Scope Matrix</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                To compare suppliers, first import and clean at least one supplier quote.
               </p>
+              <a
+                href="#/import-quotes"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+              >
+                Go to Import Quotes
+              </a>
             </div>
           ) : (
             <div className="space-y-2">
-              {availableQuotes.map((quote) => {
+              {readyQuotes.map((quote) => {
                 const isSelected = selectedQuoteIds.includes(quote.id);
-                const isEnabled = quote.is_normalized;
 
                 return (
                   <button
                     key={quote.id}
-                    onClick={() => isEnabled && handleToggleQuote(quote.id)}
-                    disabled={!isEnabled}
+                    onClick={() => handleToggleQuote(quote.id)}
                     className={`w-full flex items-center gap-3 py-3 px-3 rounded-lg border transition-all text-left ${
-                      isEnabled
-                        ? isSelected
-                          ? 'border-gray-300 bg-gray-50'
-                          : 'border-gray-200 bg-white hover:bg-gray-50'
-                        : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                      isSelected
+                        ? 'border-gray-300 bg-gray-50'
+                        : 'border-gray-200 bg-white hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex-shrink-0">
-                      {isEnabled && isSelected ? (
+                      {isSelected ? (
                         <CheckSquare className="text-blue-600" size={18} />
                       ) : (
                         <Square className="text-gray-400" size={18} />
@@ -537,11 +553,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-gray-900 text-sm">{quote.supplier_name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {quote.items_count} items • ${quote.total_amount?.toLocaleString() || '0'} • {isEnabled ? (
-                          <span className="text-green-600 font-medium">Ready</span>
-                        ) : (
-                          <span>Pending</span>
-                        )}
+                        {quote.items_count} items • ${quote.total_amount?.toLocaleString() || '0'} • <span className="text-green-600 font-medium">Ready</span>
                       </div>
                     </div>
                   </button>
@@ -557,7 +569,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
                   'Select at least 2 suppliers to generate a scope matrix.'
                 ) : (
                   <>
-                    Comparing: {availableQuotes.filter(q => selectedQuoteIds.includes(q.id)).map(q => q.supplier_name).join(' vs ')}
+                    Comparing: {readyQuotes.filter(q => selectedQuoteIds.includes(q.id)).map(q => q.supplier_name).join(' vs ')}
                   </>
                 )}
               </div>
