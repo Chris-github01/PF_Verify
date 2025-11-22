@@ -8,7 +8,6 @@ import DashboardHeader from './components/DashboardHeader';
 import NewProjectDashboard from './pages/NewProjectDashboard';
 import EnhancedImportQuotes from './pages/EnhancedImportQuotes';
 import ReviewClean from './pages/ReviewClean';
-import ReviewQueue from './pages/ReviewQueue';
 import QuoteIntelligence from './pages/QuoteIntelligence';
 import ScopeMatrix from './pages/ScopeMatrix';
 import ContractManager from './pages/ContractManager';
@@ -392,8 +391,6 @@ function AppContent() {
           onNavigateNext={() => setActiveTab('quoteintel')}
         />;
 
-      case 'reviewqueue':
-        return <ReviewQueue />;
 
       case 'quoteintel':
         if (!projectId) {

@@ -168,12 +168,6 @@ export default function NewProjectDashboard({
         route: 'review-clean'
       },
       {
-        id: 'queue',
-        name: 'Review Queue',
-        status: projectStats.hasReviewedItems ? 'completed' : 'not_started',
-        route: 'review-queue'
-      },
-      {
         id: 'intelligence',
         name: 'Quote Intelligence',
         status: projectStats.hasReviewedItems ? 'completed' : 'not_started',
