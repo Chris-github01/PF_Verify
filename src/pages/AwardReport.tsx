@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Award, TrendingUp, Shield, Download, FileText, Table as TableIcon, Printer, FolderOpen, ChevronDown, CheckCircle, Clipboard, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Award, TrendingUp, Shield, Download, FileText, Table as TableIcon, Printer, FolderOpen, ChevronDown, CheckCircle, Clipboard, AlertCircle, FileSpreadsheet, MoreHorizontal, RefreshCw, Copy, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { EqualisationMode } from '../types/equalisation.types';
@@ -37,8 +37,12 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
   const [generatingTracker, setGeneratingTracker] = useState(false);
   const [currentReportId, setCurrentReportId] = useState<string | null>(reportId || null);
   const [error, setError] = useState<string | null>(null);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [showMoreActionsDropdown, setShowMoreActionsDropdown] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
+  const moreActionsDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadProjects();
@@ -56,6 +60,12 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowProjectDropdown(false);
+      }
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setShowExportDropdown(false);
+      }
+      if (moreActionsDropdownRef.current && !moreActionsDropdownRef.current.contains(event.target as Node)) {
+        setShowMoreActionsDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -599,14 +609,14 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
       </style>
 
       <div className="space-y-6">
-        <div className="no-print flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Award Report</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Generated {new Date(awardSummary.generatedAt).toLocaleString()}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="no-print">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Award Recommendation Report</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Generated {new Date(awardSummary.generatedAt).toLocaleString()}
+              </p>
+            </div>
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowProjectDropdown(!showProjectDropdown)}
@@ -643,62 +653,165 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-800 rounded-md border border-blue-200">
-              <FileText size={16} />
-              <span className="text-sm font-semibold">Mode: {equalisationMode}</span>
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Report view</label>
+                <div className="inline-flex rounded-lg border border-gray-300 bg-white shadow-sm overflow-hidden">
+                  <button
+                    className={`px-4 py-2 text-sm font-medium border-r border-gray-300 transition-colors ${
+                      equalisationMode === 'MODEL'
+                        ? 'bg-gray-800 text-white'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                    onClick={() => setEqualisationMode('MODEL')}
+                  >
+                    Model
+                  </button>
+                  <button
+                    className={`px-4 py-2 text-sm font-medium border-r border-gray-300 transition-colors ${
+                      equalisationMode === 'PEER_MEDIAN'
+                        ? 'bg-gray-800 text-white'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                    onClick={() => setEqualisationMode('PEER_MEDIAN')}
+                  >
+                    Client
+                  </button>
+                  <button
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      equalisationMode === 'SIMPLE'
+                        ? 'bg-gray-800 text-white'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                    onClick={() => setEqualisationMode('SIMPLE')}
+                  >
+                    Simple
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={regenerateReport}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Recalculating...' : 'Recalculate report'}
+              </button>
             </div>
 
-            <button
-              onClick={() => setEqualisationMode(equalisationMode === 'MODEL' ? 'PEER_MEDIAN' : 'MODEL')}
-              className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-            >
-              Toggle Mode
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setShowExportDropdown(!showExportDropdown)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  <Download size={18} />
+                  Export report
+                  <ChevronDown size={16} className={`transition-transform ${showExportDropdown ? 'rotate-180' : ''}`} />
+                </button>
 
-            <button
-              onClick={regenerateReport}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <FileText size={18} />
-              {loading ? 'Regenerating...' : 'Regenerate'}
-            </button>
+                {showExportDropdown && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setShowExportDropdown(false);
+                          handleExportClick('pdf');
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Printer size={16} />
+                        Export PDF report
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowExportDropdown(false);
+                          handleExportClick('excel');
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <TableIcon size={16} />
+                        Export Excel summary
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowExportDropdown(false);
+                          exportItemizedComparisonToExcel();
+                        }}
+                        disabled={comparisonData.length === 0}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Export itemized comparison
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowExportDropdown(false);
+                          handlePrint();
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Printer size={16} />
+                        Print
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            <button
-              onClick={() => handleExportClick('pdf')}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-            >
-              <Printer size={18} />
-              Export PDF
-            </button>
-            <button
-              onClick={() => handleExportClick('excel')}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-            >
-              <TableIcon size={18} />
-              Export Excel
-            </button>
+              <div className="relative" ref={moreActionsDropdownRef}>
+                <button
+                  onClick={() => setShowMoreActionsDropdown(!showMoreActionsDropdown)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  <MoreHorizontal size={18} />
+                  More actions
+                  <ChevronDown size={16} className={`transition-transform ${showMoreActionsDropdown ? 'rotate-180' : ''}`} />
+                </button>
 
-            <button
-              onClick={exportItemizedComparisonToExcel}
-              disabled={comparisonData.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              title={comparisonData.length === 0 ? "No itemized comparison data available" : "Export Itemized Comparison to Excel"}
-            >
-              <FileSpreadsheet size={18} />
-              Export Items
-            </button>
-
-            <button
-              onClick={handleCreateBaseTracker}
-              disabled={!currentProject?.approved_quote_id || generatingTracker}
-              data-testid="btn-generate-base-tracker"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Clipboard size={18} />
-              {generatingTracker ? 'Creating...' : 'Create Base Tracker'}
-            </button>
+                {showMoreActionsDropdown && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setShowMoreActionsDropdown(false);
+                          handleCreateBaseTracker();
+                        }}
+                        disabled={!currentProject?.approved_quote_id || generatingTracker}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Clipboard size={16} />
+                        {generatingTracker ? 'Creating...' : 'Create contract baseline'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowMoreActionsDropdown(false);
+                        }}
+                        disabled
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Send size={16} />
+                        Send to Contract Manager
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowMoreActionsDropdown(false);
+                        }}
+                        disabled
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy size={16} />
+                        Duplicate report
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
