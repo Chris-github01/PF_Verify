@@ -41,7 +41,7 @@ export default function ContractManager({ projectId, onNavigateBack }: ContractM
     try {
       const { data: project } = await supabase
         .from('projects')
-        .select('id, name, client, updated_at')
+        .select('id, name, client, updated_at, approved_quote_id')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -49,7 +49,7 @@ export default function ContractManager({ projectId, onNavigateBack }: ContractM
         setProjectInfo(project);
       }
 
-      const approvedQuoteId = project?.approved_quote_id;
+      const approvedQuoteId = (project as any)?.approved_quote_id;
 
       if (approvedQuoteId) {
         const { data: approvedQuote } = await supabase
