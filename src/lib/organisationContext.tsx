@@ -33,9 +33,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-    console.log('[OrganisationContext] Current user:', user?.id, user?.email);
     if (!user) {
-      console.log('[OrganisationContext] No user found');
       setLoading(false);
       return;
     }
@@ -43,7 +41,6 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     // Check if admin is impersonating
     const impersonatedOrgId = getImpersonatedOrgId();
     if (impersonatedOrgId) {
-      console.log('[OrganisationContext] Impersonating org:', impersonatedOrgId);
       // Load the specific org for impersonation
       const { data: org } = await supabase
         .from('organisations')
@@ -59,45 +56,36 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    console.log('[OrganisationContext] Fetching memberships for user:', user.id);
     const { data: memberships, error: membershipError } = await supabase
       .from('organisation_members')
-      .select('organisation_id, status, role')
+      .select('organisation_id')
       .eq('user_id', user.id)
       .eq('status', 'active');
 
-    console.log('[OrganisationContext] Memberships query result:', { memberships, membershipError });
-
     if (membershipError) {
-      console.error('[OrganisationContext] Error loading memberships:', membershipError);
+      console.error('Error loading memberships:', membershipError);
       setLoading(false);
       return;
     }
 
     if (!memberships || memberships.length === 0) {
-      console.log('[OrganisationContext] No active memberships found for user');
       setOrganisations([]);
       setLoading(false);
       return;
     }
 
     const orgIds = memberships.map(m => m.organisation_id);
-    console.log('[OrganisationContext] Organisation IDs:', orgIds);
 
     const { data: orgs, error: orgsError } = await supabase
       .from('organisations')
       .select('id, name, created_at, settings, status')
       .in('id', orgIds);
 
-    console.log('[OrganisationContext] Organisations query result:', { orgs, orgsError });
-
     if (orgsError) {
-      console.error('[OrganisationContext] Error loading organisations:', orgsError);
+      console.error('Error loading organisations:', orgsError);
       setLoading(false);
       return;
     }
-
-    console.log('[OrganisationContext] Loaded organisations:', orgs);
 
     if (orgs) {
       setOrganisations(orgs);
