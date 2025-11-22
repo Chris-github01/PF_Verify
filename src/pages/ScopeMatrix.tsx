@@ -626,7 +626,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
     }
   };
 
-  const exportItemizedComparisonToExcel = () => {
+  const exportItemizedComparisonToExcel = async () => {
     try {
       console.log('Export Excel clicked', { matrixRowsCount: matrixRows.length, suppliersCount: suppliers.length });
 
@@ -635,79 +635,95 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         return;
       }
 
-      const wb = XLSX.utils.book_new();
+      const templatePath = '/templates/Itemized_Comparison_Global_1.xlsx';
+      const response = await fetch(templatePath);
 
-      const titleRow = ['Itemized Comparison'];
-      const contextRow = ['Project ID:', projectId];
-      const dateRow = ['Generated:', new Date().toLocaleString()];
-      const emptyRow = [];
+      if (!response.ok) {
+        throw new Error('Failed to load template file');
+      }
 
-      const headerRow = ['Item Description', 'Qty', 'Unit'];
-      suppliers.forEach(supplier => {
-        headerRow.push(`${supplier} Unit Rate`);
-        headerRow.push(`${supplier} Total`);
-      });
+      const arrayBuffer = await response.arrayBuffer();
+      const wb = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
 
-      const dataRows = matrixRows.map(row => {
-        const excelRow: (string | number)[] = [
-          row.systemLabel || row.systemId,
-          '',
-          ''
-        ];
+      ws['A2'] = { t: 's', v: `Project ID: ${projectId}` };
+      ws['A3'] = { t: 's', v: `Generated: ${new Date().toLocaleString()}` };
 
-        suppliers.forEach(supplier => {
-          const cell = row.cells[supplier];
-          if (cell && cell.unitRate !== null) {
-            excelRow.push(cell.unitRate);
-            const total = cell.totalValue !== undefined ? cell.totalValue :
-                         (cell.totalQuantity && cell.unitRate ? cell.totalQuantity * cell.unitRate : 0);
-            excelRow.push(total);
-          } else {
-            excelRow.push('N/A');
-            excelRow.push('N/A');
-          }
+      const startCol = 3;
+
+      for (let i = 0; i < suppliers.length; i++) {
+        const supplierCol = startCol + (i * 2);
+        const cellAddress = XLSX.utils.encode_cell({ r: 4, c: supplierCol });
+
+        if (!ws[cellAddress]) {
+          ws[cellAddress] = { t: 's', v: suppliers[i] };
+        } else {
+          ws[cellAddress].v = suppliers[i];
+        }
+
+        if (!ws['!merges']) {
+          ws['!merges'] = [];
+        }
+        ws['!merges'].push({
+          s: { r: 4, c: supplierCol },
+          e: { r: 4, c: supplierCol + 1 }
         });
 
-        return excelRow;
-      });
+        const unitRateCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol });
+        const totalCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol + 1 });
 
-      const sheetData = [
-        titleRow,
-        contextRow,
-        dateRow,
-        emptyRow,
-        headerRow,
-        ...dataRows
-      ];
+        if (!ws[unitRateCell]) ws[unitRateCell] = { t: 's', v: 'Unit Rate' };
+        if (!ws[totalCell]) ws[totalCell] = { t: 's', v: 'Total' };
+      }
 
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      const dataStartRow = 6;
 
-      ws['!cols'] = [
-        { wch: 40 },
-        { wch: 8 },
-        { wch: 8 },
-        ...suppliers.flatMap(() => [{ wch: 15 }, { wch: 15 }])
-      ];
+      matrixRows.forEach((row, idx) => {
+        const rowNum = dataStartRow + idx;
 
-      if (ws['A1']) {
-        ws['A1'].s = {
-          font: { bold: true, sz: 14 },
-          alignment: { horizontal: 'left' }
+        ws[XLSX.utils.encode_cell({ r: rowNum, c: 0 })] = {
+          t: 's',
+          v: row.systemLabel || row.systemId
         };
-      }
+        ws[XLSX.utils.encode_cell({ r: rowNum, c: 1 })] = {
+          t: 's',
+          v: ''
+        };
+        ws[XLSX.utils.encode_cell({ r: rowNum, c: 2 })] = {
+          t: 's',
+          v: ''
+        };
 
-      for (let col = 0; col < headerRow.length; col++) {
-        const cellRef = XLSX.utils.encode_cell({ r: 4, c: col });
-        if (ws[cellRef]) {
-          ws[cellRef].s = {
-            font: { bold: true },
-            fill: { fgColor: { rgb: 'E5E7EB' } },
-            alignment: { horizontal: 'center' }
-          };
-        }
-      }
+        suppliers.forEach((supplier, supplierIdx) => {
+          const cell = row.cells[supplier];
+          const unitRateCol = startCol + (supplierIdx * 2);
+          const totalCol = unitRateCol + 1;
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
+          if (cell && cell.unitRate !== null) {
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
+              t: 'n',
+              v: cell.unitRate,
+              z: '"$"#,##0.00'
+            };
+            const total = cell.totalValue !== undefined ? cell.totalValue :
+                         (cell.totalQuantity && cell.unitRate ? cell.totalQuantity * cell.unitRate : 0);
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: totalCol })] = {
+              t: 'n',
+              v: total,
+              z: '"$"#,##0.00'
+            };
+          } else {
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
+              t: 's',
+              v: 'N/A'
+            };
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: totalCol })] = {
+              t: 's',
+              v: 'N/A'
+            };
+          }
+        });
+      });
 
       const filename = `Itemized_Comparison_${projectId}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, filename);

@@ -348,92 +348,101 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
     handlePrint();
   };
 
-  const exportItemizedComparisonToExcel = () => {
+  const exportItemizedComparisonToExcel = async () => {
     if (!awardSummary || comparisonData.length === 0) {
       onToast?.('No itemized comparison data available to export.', 'error');
       return;
     }
 
     try {
-      const wb = XLSX.utils.book_new();
+      const templatePath = '/templates/Itemized_Comparison_Global_1.xlsx';
+      const response = await fetch(templatePath);
 
-      const titleRow = ['Itemized Comparison'];
-      const contextRow = ['Project:', currentProject?.name || projectId];
-      const dateRow = ['Generated:', new Date().toLocaleString()];
-      const emptyRow = [];
+      if (!response.ok) {
+        throw new Error('Failed to load template file');
+      }
 
-      const headerRow = ['Item Description', 'Qty', 'Unit'];
-      awardSummary.suppliers.forEach(supplier => {
-        headerRow.push(`${supplier.supplierName} Unit Rate`);
-        headerRow.push(`${supplier.supplierName} Total`);
-      });
+      const arrayBuffer = await response.arrayBuffer();
+      const wb = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
 
-      const dataRows = comparisonData.map(row => {
-        const excelRow: (string | number)[] = [
-          row.description || '',
-          row.quantity || '',
-          row.unit || ''
-        ];
+      ws['A2'] = { t: 's', v: `Project: ${currentProject?.name || projectId}` };
+      ws['A3'] = { t: 's', v: `Generated: ${new Date().toLocaleString()}` };
 
-        awardSummary.suppliers.forEach(supplier => {
-          const supplierData = row.suppliers?.[supplier.supplierName];
-          if (supplierData && supplierData.unitPrice !== null) {
-            excelRow.push(supplierData.unitPrice);
-            excelRow.push(supplierData.total);
-          } else {
-            excelRow.push('N/A');
-            excelRow.push('N/A');
-          }
+      const suppliers = awardSummary.suppliers;
+      const startCol = 3;
+
+      for (let i = 0; i < suppliers.length; i++) {
+        const supplierCol = startCol + (i * 2);
+        const cellAddress = XLSX.utils.encode_cell({ r: 4, c: supplierCol });
+
+        if (!ws[cellAddress]) {
+          ws[cellAddress] = { t: 's', v: suppliers[i].supplierName };
+        } else {
+          ws[cellAddress].v = suppliers[i].supplierName;
+        }
+
+        if (!ws['!merges']) {
+          ws['!merges'] = [];
+        }
+        ws['!merges'].push({
+          s: { r: 4, c: supplierCol },
+          e: { r: 4, c: supplierCol + 1 }
         });
 
-        return excelRow;
-      });
+        const unitRateCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol });
+        const totalCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol + 1 });
 
-      const subtotalRow = ['', '', 'Subtotals:'];
-      awardSummary.suppliers.forEach(supplier => {
-        subtotalRow.push('');
-        subtotalRow.push(supplier.adjustedTotal);
-      });
+        if (!ws[unitRateCell]) ws[unitRateCell] = { t: 's', v: 'Unit Rate' };
+        if (!ws[totalCell]) ws[totalCell] = { t: 's', v: 'Total' };
+      }
 
-      const sheetData = [
-        titleRow,
-        contextRow,
-        dateRow,
-        emptyRow,
-        headerRow,
-        ...dataRows,
-        emptyRow,
-        subtotalRow
-      ];
+      const dataStartRow = 6;
 
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      comparisonData.forEach((row, idx) => {
+        const rowNum = dataStartRow + idx;
 
-      ws['!cols'] = [
-        { wch: 50 },
-        { wch: 8 },
-        { wch: 8 },
-        ...awardSummary.suppliers.flatMap(() => [{ wch: 15 }, { wch: 15 }])
-      ];
-
-      if (ws['A1']) {
-        ws['A1'].s = {
-          font: { bold: true, sz: 14 },
-          alignment: { horizontal: 'left' }
+        ws[XLSX.utils.encode_cell({ r: rowNum, c: 0 })] = {
+          t: 's',
+          v: row.description || ''
         };
-      }
+        ws[XLSX.utils.encode_cell({ r: rowNum, c: 1 })] = {
+          t: 'n',
+          v: row.quantity || 0
+        };
+        ws[XLSX.utils.encode_cell({ r: rowNum, c: 2 })] = {
+          t: 's',
+          v: row.unit || ''
+        };
 
-      for (let col = 0; col < headerRow.length; col++) {
-        const cellRef = XLSX.utils.encode_cell({ r: 4, c: col });
-        if (ws[cellRef]) {
-          ws[cellRef].s = {
-            font: { bold: true },
-            fill: { fgColor: { rgb: 'E5E7EB' } },
-            alignment: { horizontal: 'center' }
-          };
-        }
-      }
+        suppliers.forEach((supplier, supplierIdx) => {
+          const supplierData = row.suppliers?.[supplier.supplierName];
+          const unitRateCol = startCol + (supplierIdx * 2);
+          const totalCol = unitRateCol + 1;
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
+          if (supplierData && supplierData.unitPrice !== null) {
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
+              t: 'n',
+              v: supplierData.unitPrice,
+              z: '"$"#,##0.00'
+            };
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: totalCol })] = {
+              t: 'n',
+              v: supplierData.total,
+              z: '"$"#,##0.00'
+            };
+          } else {
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
+              t: 's',
+              v: 'N/A'
+            };
+            ws[XLSX.utils.encode_cell({ r: rowNum, c: totalCol })] = {
+              t: 's',
+              v: 'N/A'
+            };
+          }
+        });
+      });
 
       const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `Itemized_Comparison_${sanitizedProjectName}_${new Date().toISOString().split('T')[0]}.xlsx`;
