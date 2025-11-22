@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
-import { FileDown, Printer, AlertTriangle, Target, TrendingUp, Shield, Loader2, Download } from 'lucide-react';
+import { FileDown, Printer, AlertTriangle, Target, TrendingUp, Shield, Loader2, Download, AlertCircle, Star, CheckCircle, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { analyzeQuoteIntelligence } from '../lib/quoteIntelligence/analyzer';
-import type { QuoteIntelligenceAnalysis } from '../types/quoteIntelligence.types';
+import type { QuoteIntelligenceAnalysis, RedFlag } from '../types/quoteIntelligence.types';
+import WorkflowNav from '../components/WorkflowNav';
 
 interface QuoteIntelligenceReportProps {
   projectId: string;
   projectName?: string;
+  onNavigateBack?: () => void;
+  onNavigateNext?: () => void;
 }
 
-export default function QuoteIntelligenceReport({ projectId, projectName }: QuoteIntelligenceReportProps) {
+export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext }: QuoteIntelligenceReportProps) {
   const [analysis, setAnalysis] = useState<QuoteIntelligenceAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,22 +85,6 @@ export default function QuoteIntelligenceReport({ projectId, projectName }: Quot
     const redFlagsSheet = XLSX.utils.aoa_to_sheet(redFlagsData);
     XLSX.utils.book_append_sheet(wb, redFlagsSheet, 'Red Flags');
 
-    const gapsData = [
-      ['Type', 'Title', 'Description', 'Missing In', 'Present In', 'Impact', 'Recommendation'],
-      ...analysis.coverageGaps.map(gap => [
-        gap.gapType,
-        gap.title,
-        gap.description,
-        gap.missingIn.join(', '),
-        gap.presentIn.join(', '),
-        `$${gap.estimatedImpact.toLocaleString()}`,
-        gap.recommendation,
-      ]),
-    ];
-
-    const gapsSheet = XLSX.utils.aoa_to_sheet(gapsData);
-    XLSX.utils.book_append_sheet(wb, gapsSheet, 'Coverage Gaps');
-
     const systemsData = [
       ['System Name', 'System Type', 'Supplier', 'Item Count', 'Total Value', 'Confidence'],
       ...analysis.systemsDetected.map(system => {
@@ -149,6 +136,47 @@ export default function QuoteIntelligenceReport({ projectId, projectName }: Quot
     }
   };
 
+  const groupRedFlagsBySeverity = (redFlags: RedFlag[]) => {
+    return {
+      critical: redFlags.filter(f => f.severity === 'critical'),
+      high: redFlags.filter(f => f.severity === 'high'),
+      medium: redFlags.filter(f => f.severity === 'medium'),
+      low: redFlags.filter(f => f.severity === 'low'),
+    };
+  };
+
+  const getSupplierQualityData = () => {
+    if (!analysis) return [];
+
+    const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number }>();
+
+    analysis.normalizedItems.forEach(item => {
+      if (!supplierMap.has(item.quoteId)) {
+        supplierMap.set(item.quoteId, {
+          name: item.supplierName,
+          qualityScore: 0,
+          coverageScore: 0,
+          redFlags: 0,
+        });
+      }
+    });
+
+    analysis.redFlags.forEach(flag => {
+      const supplier = supplierMap.get(flag.quoteId);
+      if (supplier) {
+        supplier.redFlags++;
+      }
+    });
+
+    const suppliers = Array.from(supplierMap.values());
+    suppliers.forEach(s => {
+      s.qualityScore = Math.max(0, 100 - (s.redFlags * 10));
+      s.coverageScore = analysis.summary.coverageScore;
+    });
+
+    return suppliers.sort((a, b) => b.qualityScore - a.qualityScore);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -180,239 +208,378 @@ export default function QuoteIntelligenceReport({ projectId, projectName }: Quot
     );
   }
 
+  const groupedFlags = groupRedFlagsBySeverity(analysis.redFlags);
+  const supplierQualityData = getSupplierQualityData();
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <WorkflowNav
+        currentStep="quoteintel"
+        onNavigateBack={onNavigateBack}
+        onNavigateNext={onNavigateNext}
+      />
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
-        <div className="flex items-center justify-between mb-6 print:mb-4">
+        <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Quote Intelligence Report</h1>
-            <p className="text-sm text-gray-600 mt-1">{projectName || 'Project Analysis'}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              Generated: {new Date(analysis.analyzedAt).toLocaleString()}
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900">Quote Intelligence</h1>
+            <p className="text-sm text-gray-600 mt-1">Automated analysis of supplier quotes</p>
           </div>
           <div className="flex gap-2 print:hidden">
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
             >
-              <Download size={18} />
-              Excel
+              <Download size={16} />
+              Export Excel
             </button>
             <button
               onClick={handleExportPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
             >
-              <FileDown size={18} />
-              PDF
+              <FileDown size={16} />
+              Export PDF
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
             >
-              <Printer size={18} />
+              <Printer size={16} />
               Print
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <div className="text-sm text-blue-700 font-medium mb-1">Quotes Analyzed</div>
-            <div className="text-3xl font-bold text-blue-900">{analysis.quotesAnalyzed}</div>
-          </div>
-          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-            <div className="text-sm text-red-700 font-medium mb-1">Red Flags</div>
-            <div className="text-3xl font-bold text-red-900">{analysis.summary.totalRedFlags}</div>
-            <div className="text-xs text-red-600 mt-1">{analysis.summary.criticalIssues} critical</div>
-          </div>
-          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <div className="text-sm text-green-700 font-medium mb-1">Coverage Score</div>
-            <div className="text-3xl font-bold text-green-900">{analysis.summary.coverageScore}%</div>
-          </div>
-          <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-            <div className="text-sm text-purple-700 font-medium mb-1">Quality Score</div>
-            <div className="text-3xl font-bold text-purple-900">{Math.round(analysis.summary.averageQualityScore)}%</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-            <div className="text-sm text-blue-700 font-semibold mb-2">Best Value Supplier</div>
-            <div className="text-xl font-bold text-blue-900">{analysis.summary.bestValueSupplier}</div>
-          </div>
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-            <div className="text-sm text-green-700 font-semibold mb-2">Most Complete Supplier</div>
-            <div className="text-xl font-bold text-green-900">{analysis.summary.mostCompleteSupplier}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
-        <div className="flex items-center gap-3 mb-4">
-          <AlertTriangle className="text-red-600" size={24} />
-          <h2 className="text-xl font-bold text-gray-900">Red Flags</h2>
-        </div>
-
-        {analysis.redFlags.length === 0 ? (
-          <p className="text-gray-600 py-4">No red flags detected.</p>
-        ) : (
-          <div className="space-y-3">
-            {analysis.redFlags.map((flag) => {
-              const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
-              return (
-                <div key={flag.id} className={`border rounded-lg p-4 ${getSeverityColor(flag.severity)}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold uppercase px-2 py-1 bg-white rounded">
-                          {flag.severity}
-                        </span>
-                        <span className="text-sm font-medium">{flag.category}</span>
-                      </div>
-                      <h3 className="font-semibold text-lg">{flag.title}</h3>
-                      <p className="text-sm mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm mb-2">{flag.description}</p>
-                  {flag.recommendation && (
-                    <div className="mt-2 pt-2 border-t border-current border-opacity-20">
-                      <p className="text-sm font-medium">Recommendation:</p>
-                      <p className="text-sm">{flag.recommendation}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
-        <div className="flex items-center gap-3 mb-4">
-          <Target className="text-orange-600" size={24} />
-          <h2 className="text-xl font-bold text-gray-900">Coverage Gaps</h2>
-        </div>
-
-        {analysis.coverageGaps.length === 0 ? (
-          <p className="text-gray-600 py-4">No coverage gaps identified.</p>
-        ) : (
-          <div className="space-y-3">
-            {analysis.coverageGaps.map((gap) => (
-              <div key={gap.id} className="border border-orange-200 rounded-lg p-4 bg-orange-50">
-                <h3 className="font-semibold text-lg text-orange-900 mb-2">{gap.title}</h3>
-                <p className="text-sm text-orange-800 mb-3">{gap.description}</p>
-
-                <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
-                  <div>
-                    <p className="font-medium text-orange-900">Missing in:</p>
-                    <p className="text-orange-700">{gap.missingIn.join(', ')}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-orange-900">Present in:</p>
-                    <p className="text-orange-700">{gap.presentIn.join(', ')}</p>
-                  </div>
-                </div>
-
-                {gap.estimatedImpact > 0 && (
-                  <p className="text-sm font-semibold text-orange-900 mb-2">
-                    Estimated Impact: ${gap.estimatedImpact.toLocaleString()}
-                  </p>
-                )}
-
-                {gap.recommendation && (
-                  <div className="mt-2 pt-2 border-t border-orange-300">
-                    <p className="text-sm font-medium text-orange-900">Recommendation:</p>
-                    <p className="text-sm text-orange-800">{gap.recommendation}</p>
-                  </div>
-                )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-600 mb-1">Issues Found</div>
+                <div className="text-3xl font-bold text-gray-900">{analysis.summary.totalRedFlags}</div>
               </div>
-            ))}
+              <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="text-orange-600" size={24} />
+              </div>
+            </div>
           </div>
-        )}
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-600 mb-1">Critical Risks</div>
+                <div className="text-3xl font-bold text-gray-900">{analysis.summary.criticalIssues}</div>
+              </div>
+              <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
+                <AlertCircle className="text-red-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-600 mb-1">Top Supplier</div>
+                <div className="text-xl font-bold text-gray-900 truncate">{analysis.summary.mostCompleteSupplier}</div>
+              </div>
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                <Star className="text-blue-600" size={24} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
-        <div className="flex items-center gap-3 mb-4">
-          <Shield className="text-blue-600" size={24} />
-          <h2 className="text-xl font-bold text-gray-900">Systems Detected</h2>
-        </div>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Supplier Comparison</h2>
 
-        {analysis.systemsDetected.length === 0 ? (
-          <p className="text-gray-600 py-4">No systems detected.</p>
+        {supplierQualityData.length === 0 ? (
+          <p className="text-gray-600 py-4">No supplier data available.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 font-semibold">System</th>
-                  <th className="text-left py-2 font-semibold">Type</th>
-                  <th className="text-left py-2 font-semibold">Supplier</th>
-                  <th className="text-right py-2 font-semibold">Items</th>
-                  <th className="text-right py-2 font-semibold">Total Value</th>
-                  <th className="text-right py-2 font-semibold">Confidence</th>
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Supplier</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Quality Score</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Coverage Score</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Red Flags</th>
                 </tr>
               </thead>
-              <tbody>
-                {analysis.systemsDetected.map((system) => {
-                  const quote = analysis.normalizedItems.find(item => item.quoteId === system.quoteId);
-                  return (
-                    <tr key={system.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-2">{system.systemName}</td>
-                      <td className="py-2 text-gray-600">{system.systemType}</td>
-                      <td className="py-2 text-gray-600">{quote?.supplierName || 'Unknown'}</td>
-                      <td className="py-2 text-right">{system.itemCount}</td>
-                      <td className="py-2 text-right font-medium">${system.totalValue.toLocaleString()}</td>
-                      <td className="py-2 text-right">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          system.confidence > 0.8 ? 'bg-green-100 text-green-800' :
-                          system.confidence > 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {(system.confidence * 100).toFixed(0)}%
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-gray-200">
+                {supplierQualityData.map((supplier, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{supplier.name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${supplier.qualityScore}%` }}
+                          />
+                        </div>
+                        <span className="font-medium">{supplier.qualityScore}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
+                          <div
+                            className="bg-green-600 h-2 rounded-full"
+                            style={{ width: `${supplier.coverageScore}%` }}
+                          />
+                        </div>
+                        <span className="font-medium">{supplier.coverageScore}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        supplier.redFlags === 0 ? 'bg-green-100 text-green-800' :
+                        supplier.redFlags <= 2 ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {supplier.redFlags}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
-        <div className="flex items-center gap-3 mb-4">
-          <TrendingUp className="text-purple-600" size={24} />
-          <h2 className="text-xl font-bold text-gray-900">Supplier Insights</h2>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
+        <div className="flex items-center gap-3 mb-6">
+          <AlertTriangle className="text-red-600" size={24} />
+          <h2 className="text-xl font-bold text-gray-900">Red Flags</h2>
         </div>
 
-        {analysis.supplierInsights.length === 0 ? (
-          <p className="text-gray-600 py-4">No supplier insights available.</p>
+        {analysis.redFlags.length === 0 ? (
+          <div className="text-center py-8">
+            <CheckCircle className="mx-auto text-green-600 mb-3" size={48} />
+            <p className="text-gray-900 font-medium">No red flags detected</p>
+            <p className="text-sm text-gray-600 mt-1">All quotes passed automated quality checks</p>
+          </div>
         ) : (
+          <div className="space-y-6">
+            {groupedFlags.critical.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-red-900 mb-3 flex items-center gap-2">
+                  <AlertCircle size={20} />
+                  Critical ({groupedFlags.critical.length})
+                </h3>
+                <div className="space-y-3">
+                  {groupedFlags.critical.map((flag) => {
+                    const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
+                    return (
+                      <div key={flag.id} className="border border-red-300 rounded-lg p-4 bg-red-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-bold uppercase px-2 py-1 bg-red-600 text-white rounded">
+                                {flag.severity}
+                              </span>
+                              <span className="text-sm font-medium text-red-900">{flag.category}</span>
+                            </div>
+                            <h4 className="font-semibold text-gray-900">{flag.title}</h4>
+                            <p className="text-sm text-gray-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-800 mb-2">{flag.description}</p>
+                        {flag.recommendation && (
+                          <div className="mt-3 pt-3 border-t border-red-200">
+                            <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
+                            <p className="text-sm text-gray-700">{flag.recommendation}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {groupedFlags.high.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-orange-900 mb-3 flex items-center gap-2">
+                  <AlertTriangle size={20} />
+                  High ({groupedFlags.high.length})
+                </h3>
+                <div className="space-y-3">
+                  {groupedFlags.high.map((flag) => {
+                    const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
+                    return (
+                      <div key={flag.id} className="border border-orange-300 rounded-lg p-4 bg-orange-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-bold uppercase px-2 py-1 bg-orange-600 text-white rounded">
+                                {flag.severity}
+                              </span>
+                              <span className="text-sm font-medium text-orange-900">{flag.category}</span>
+                            </div>
+                            <h4 className="font-semibold text-gray-900">{flag.title}</h4>
+                            <p className="text-sm text-gray-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-800 mb-2">{flag.description}</p>
+                        {flag.recommendation && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
+                            <p className="text-sm text-gray-700">{flag.recommendation}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {groupedFlags.medium.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-900 mb-3">Medium ({groupedFlags.medium.length})</h3>
+                <div className="space-y-2">
+                  {groupedFlags.medium.map((flag) => {
+                    const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
+                    return (
+                      <div key={flag.id} className="border border-yellow-300 rounded-lg p-3 bg-yellow-50">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-bold uppercase px-2 py-0.5 bg-yellow-600 text-white rounded">
+                            {flag.severity}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">{flag.title}</span>
+                          <span className="text-sm text-gray-600">• {quote?.supplierName || 'Unknown'}</span>
+                        </div>
+                        <p className="text-sm text-gray-700">{flag.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {groupedFlags.low.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900 mb-3">Low ({groupedFlags.low.length})</h3>
+                <div className="space-y-2">
+                  {groupedFlags.low.map((flag) => {
+                    const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
+                    return (
+                      <div key={flag.id} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-bold uppercase px-2 py-0.5 bg-blue-600 text-white rounded">
+                            {flag.severity}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">{flag.title}</span>
+                          <span className="text-sm text-gray-600">• {quote?.supplierName || 'Unknown'}</span>
+                        </div>
+                        <p className="text-sm text-gray-700">{flag.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Recommended Actions</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                <Target className="text-blue-600" size={20} />
+              </div>
+              <ArrowRight className="text-gray-400" size={18} />
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-2">Normalise Remaining Items</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Ensure all line items have standardized units and attributes for accurate comparison.
+            </p>
+            <button
+              onClick={onNavigateBack}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Go to Review & Clean →
+            </button>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4 hover:border-green-300 hover:shadow-md transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                <TrendingUp className="text-green-600" size={20} />
+              </div>
+              <ArrowRight className="text-gray-400" size={18} />
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-2">Map Unmapped Systems</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Complete system mapping to improve coverage analysis and reporting accuracy.
+            </p>
+            <button
+              onClick={onNavigateBack}
+              className="text-sm text-green-600 hover:text-green-700 font-medium"
+            >
+              Go to Review & Clean →
+            </button>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-4 hover:border-purple-300 hover:shadow-md transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                <Shield className="text-purple-600" size={20} />
+              </div>
+              <ArrowRight className="text-gray-400" size={18} />
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-2">Review Problematic Rows</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Address flagged items to improve quote quality before generating reports.
+            </p>
+            <button
+              onClick={onNavigateBack}
+              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+            >
+              Go to Review & Clean →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {analysis.coverageGaps && analysis.coverageGaps.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
+          <div className="flex items-center gap-3 mb-4">
+            <Target className="text-orange-600" size={24} />
+            <h2 className="text-xl font-bold text-gray-900">Coverage Gaps</h2>
+          </div>
+
           <div className="space-y-3">
-            {analysis.supplierInsights.map((insight) => (
-              <div key={insight.id} className="border border-purple-200 rounded-lg p-4 bg-purple-50">
+            {analysis.coverageGaps.map((gap) => (
+              <div key={gap.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="font-semibold text-lg text-purple-900">{insight.supplierName}</h3>
-                    <span className="text-xs font-medium text-purple-700 uppercase">{insight.insightType}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium uppercase px-2 py-1 bg-gray-600 text-white rounded">
+                        {gap.gapType}
+                      </span>
+                    </div>
+                    <h4 className="font-semibold text-gray-900">{gap.title}</h4>
                   </div>
                 </div>
-                <h4 className="font-semibold text-purple-900 mb-1">{insight.title}</h4>
-                <p className="text-sm text-purple-800 mb-3">{insight.description}</p>
-
-                {insight.recommendation && (
-                  <div className="mt-2 pt-2 border-t border-purple-300">
-                    <p className="text-sm font-medium text-purple-900">Recommendation:</p>
-                    <p className="text-sm text-purple-800">{insight.recommendation}</p>
+                <p className="text-sm text-gray-700 mb-2">{gap.description}</p>
+                {gap.recommendation && (
+                  <div className="mt-2 pt-2 border-t border-gray-300">
+                    <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
+                    <p className="text-sm text-gray-700">{gap.recommendation}</p>
                   </div>
                 )}
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
