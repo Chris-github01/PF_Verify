@@ -10,6 +10,7 @@ import EnhancedImportQuotes from './pages/EnhancedImportQuotes';
 import ReviewClean from './pages/ReviewClean';
 import QuoteIntelligence from './pages/QuoteIntelligence';
 import ScopeMatrix from './pages/ScopeMatrix';
+import Equalisation from './pages/Equalisation';
 import ContractManager from './pages/ContractManager';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -457,6 +458,31 @@ function AppContent() {
         return <ScopeMatrix
           projectId={projectId}
           onNavigateBack={() => setActiveTab('quoteintel')}
+          onNavigateNext={() => setActiveTab('equalisation')}
+        />;
+
+      case 'equalisation':
+        if (!projectId) {
+          return <NewProjectDashboard
+            projectId={null}
+            projectName={undefined}
+            allProjects={allProjects}
+            onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
+            onNavigateToQuotes={() => {
+              if (handleNavigationGuard('quotes')) setActiveTab('quotes');
+            }}
+            onNavigateToMatrix={() => {
+              if (handleNavigationGuard('scope')) setActiveTab('scope');
+            }}
+            onNavigateToReports={() => {
+              if (handleNavigationGuard('reports')) setActiveTab('reports');
+            }}
+          />;
+        }
+        return <Equalisation
+          projectId={projectId}
+          onNavigateBack={() => setActiveTab('scope')}
           onNavigateNext={() => setActiveTab('reports')}
         />;
 

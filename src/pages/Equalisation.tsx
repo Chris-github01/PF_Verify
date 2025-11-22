@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Download, TrendingUp, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getModelRateProvider } from '../lib/modelRate/modelRateProvider';
-import { compareAgainstModel } from '../lib/comparison/compareAgainstModel';
+import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgainstModel';
 import { buildEqualisation } from '../lib/equalisation/buildEqualisation';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { EqualisationMode, EqualisationResult } from '../types/equalisation.types';
+import WorkflowNav from '../components/WorkflowNav';
 
 interface EqualisationProps {
   projectId: string;
@@ -74,7 +75,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
       const provider = getModelRateProvider(projectId);
       await provider.loadSettings();
 
-      const comparisons = await compareAgainstModel(
+      const comparisons = await compareAgainstModelHybrid(
         normalisedLines,
         mappings,
         (criteria) => provider.getModelRate(criteria)
@@ -515,6 +516,15 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
           )}
         </>
       )}
+
+      <WorkflowNav
+        currentStep={5}
+        totalSteps={6}
+        onBack={onNavigateBack}
+        onNext={onNavigateNext}
+        backLabel="Back: Scope Matrix"
+        nextLabel="Next: Award Report"
+      />
     </div>
   );
 }

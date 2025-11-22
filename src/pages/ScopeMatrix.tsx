@@ -1206,6 +1206,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
 
             <WorkflowNav
               currentStep={4}
+              totalSteps={6}
               onBack={onNavigateBack}
               onNext={onNavigateNext}
               backLabel="Back: Quote Intelligence"
