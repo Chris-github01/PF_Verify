@@ -51,6 +51,7 @@ export default function CreateOrganisation() {
       if (subError) throw subError;
 
       let ownerId = '';
+      let memberStatus = 'invited';
 
       const { data: existingUser } = await supabase
         .from('profiles')
@@ -60,6 +61,7 @@ export default function CreateOrganisation() {
 
       if (existingUser) {
         ownerId = existingUser.id;
+        memberStatus = 'active';
       } else {
         const tempPassword = Math.random().toString(36).slice(-12);
         const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
@@ -78,7 +80,7 @@ export default function CreateOrganisation() {
           organisation_id: org.id,
           user_id: ownerId,
           role: 'owner',
-          status: 'invited',
+          status: memberStatus,
           invited_by_user_id: currentUser?.id,
         });
 
