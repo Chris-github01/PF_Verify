@@ -495,10 +495,36 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           flag: row.flag,
           modelRate: row.modelRate,
           variancePct: row.variancePct,
-          componentCount: row.componentCount,
+          componentCount: 1,
           quoteId: row.quoteId,
           quoteItemId: row.quoteItemId,
+          totalQuantity: row.quantity || 0,
+          totalValue: row.total || 0,
         };
+      } else {
+        const cell = matrixRow.cells[row.supplier];
+        const currentTotal = cell.totalValue || 0;
+        const currentQty = cell.totalQuantity || 0;
+        const newQty = currentQty + (row.quantity || 0);
+        const newTotal = currentTotal + (row.total || 0);
+
+        cell.totalQuantity = newQty;
+        cell.totalValue = newTotal;
+        cell.componentCount = (cell.componentCount || 0) + 1;
+        cell.unitRate = newQty > 0 ? newTotal / newQty : cell.unitRate;
+
+        if (row.modelRate !== null && cell.unitRate > 0) {
+          const variance = ((cell.unitRate - row.modelRate) / row.modelRate) * 100;
+          cell.variancePct = variance;
+
+          if (Math.abs(variance) <= 10) {
+            cell.flag = 'GREEN';
+          } else if (Math.abs(variance) <= 25) {
+            cell.flag = 'AMBER';
+          } else {
+            cell.flag = 'RED';
+          }
+        }
       }
     });
 
@@ -509,10 +535,25 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
     });
 
     console.log('buildMatrix: Generated', rows.length, 'matrix rows');
+    console.log('buildMatrix: Rows by systemId breakdown:');
+    const systemCounts = new Map<string, number>();
+    filteredData.forEach(row => {
+      systemCounts.set(row.systemId, (systemCounts.get(row.systemId) || 0) + 1);
+    });
+    systemCounts.forEach((count, systemId) => {
+      console.log(`  - ${systemId}: ${count} items`);
+    });
+
     if (rows.length > 0) {
       console.log('buildMatrix: Sample row:', rows[0]);
+      console.log('buildMatrix: Sample row cells:', Object.keys(rows[0].cells));
     } else {
-      console.warn('buildMatrix: WARNING - No matrix rows generated! Check comparison data and filters.');
+      console.warn('buildMatrix: WARNING - No matrix rows generated!');
+      console.warn('buildMatrix: Diagnostics:', diagnostics);
+      if (filteredData.length > 0) {
+        console.warn('buildMatrix: We have filtered data but no rows! This is the bug.');
+        console.warn('buildMatrix: Sample filtered data:', filteredData.slice(0, 3));
+      }
     }
 
     setMatrixRows(rows);

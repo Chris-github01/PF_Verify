@@ -30,6 +30,8 @@ export interface MatrixCell {
   componentCount: number | null;
   quoteId: string;
   quoteItemId: string;
+  totalQuantity?: number;
+  totalValue?: number;
 }
 
 export interface MatrixRow {
