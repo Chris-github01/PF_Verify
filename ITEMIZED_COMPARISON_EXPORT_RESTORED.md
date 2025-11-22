@@ -69,8 +69,11 @@ Last rows:
 - Icon: `FileSpreadsheet` (green icon)
 - Label: "Export Items"
 - Color: Emerald green (`bg-emerald-600`)
-- Visibility: Only shown when `comparisonData.length > 0`
-- Tooltip: "Export Itemized Comparison to Excel"
+- **Visibility**: **ALWAYS VISIBLE** (disabled when no data)
+- State: Disabled (gray) when `comparisonData.length === 0`
+- Tooltip:
+  - When enabled: "Export Itemized Comparison to Excel"
+  - When disabled: "No itemized comparison data available"
 
 **Button Order** (left to right):
 1. Regenerate
@@ -163,19 +166,20 @@ const exportItemizedComparisonToExcel = () => {
 };
 ```
 
-**UI Button** (lines 683-692):
+**UI Button** (lines 683-691):
 ```typescript
-{comparisonData.length > 0 && (
-  <button
-    onClick={exportItemizedComparisonToExcel}
-    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
-    title="Export Itemized Comparison to Excel"
-  >
-    <FileSpreadsheet size={18} />
-    Export Items
-  </button>
-)}
+<button
+  onClick={exportItemizedComparisonToExcel}
+  disabled={comparisonData.length === 0}
+  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+  title={comparisonData.length === 0 ? "No itemized comparison data available" : "Export Itemized Comparison to Excel"}
+>
+  <FileSpreadsheet size={18} />
+  Export Items
+</button>
 ```
+
+**Key Point**: Button is **always visible**, but disabled when no data exists.
 
 ---
 
