@@ -38,27 +38,23 @@ export default function PlatformAdminUsers() {
         .order('created_at', { ascending: false });
 
       if (adminsData) {
-        const adminsWithEmails = await Promise.all(
-          adminsData.map(async (admin) => {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('email')
-              .eq('id', admin.user_id)
-              .maybeSingle();
-
-            return {
-              ...admin,
-              user_email: profile?.email || 'Unknown',
-            };
-          })
-        );
-
-        setAdmins(adminsWithEmails);
+        setAdmins(adminsData.map(admin => ({
+          ...admin,
+          user_email: admin.email || 'Unknown'
+        })));
       }
 
-      const { data: { users } } = await supabase.auth.admin.listUsers();
-      if (users) {
-        setAllUsers(users);
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email, created_at')
+        .order('created_at', { ascending: false });
+
+      if (profilesData) {
+        setAllUsers(profilesData.map(p => ({
+          id: p.id,
+          email: p.email || '',
+          created_at: p.created_at
+        })));
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -81,14 +77,20 @@ export default function PlatformAdminUsers() {
 
     setAdding(true);
     try {
-      const { data: currentUser } = await supabase.auth.getUser();
+      const selectedUser = allUsers.find(u => u.id === selectedUserId);
+      if (!selectedUser) {
+        throw new Error('User not found');
+      }
+
+      const fullName = selectedUser.email?.split('@')[0] || 'User';
 
       const { error } = await supabase
         .from('platform_admins')
         .insert({
           user_id: selectedUserId,
+          email: selectedUser.email,
+          full_name: fullName,
           is_active: true,
-          created_by_user_id: currentUser?.data.user?.id,
         });
 
       if (error) throw error;
@@ -104,12 +106,12 @@ export default function PlatformAdminUsers() {
     }
   };
 
-  const handleToggleActive = async (adminId: string, currentStatus: boolean) => {
+  const handleToggleActive = async (userId: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
         .from('platform_admins')
         .update({ is_active: !currentStatus })
-        .eq('id', adminId);
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -123,14 +125,14 @@ export default function PlatformAdminUsers() {
     }
   };
 
-  const handleRemoveAdmin = async (adminId: string, email: string) => {
+  const handleRemoveAdmin = async (userId: string, email: string) => {
     if (!confirm(`Remove platform admin access for ${email}?`)) return;
 
     try {
       const { error } = await supabase
         .from('platform_admins')
         .delete()
-        .eq('id', adminId);
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -224,7 +226,7 @@ export default function PlatformAdminUsers() {
                 </tr>
               ) : (
                 admins.map((admin) => (
-                  <tr key={admin.id} className="hover:bg-slate-50 transition">
+                  <tr key={admin.user_id} className="hover:bg-slate-50 transition">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -264,7 +266,7 @@ export default function PlatformAdminUsers() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleToggleActive(admin.id, admin.is_active)}
+                          onClick={() => handleToggleActive(admin.user_id, admin.is_active)}
                           className={`text-sm font-medium ${
                             admin.is_active
                               ? 'text-slate-600 hover:text-slate-800'
@@ -275,7 +277,7 @@ export default function PlatformAdminUsers() {
                         </button>
                         <span className="text-slate-300">|</span>
                         <button
-                          onClick={() => handleRemoveAdmin(admin.id, admin.user_email || 'Unknown')}
+                          onClick={() => handleRemoveAdmin(admin.user_id, admin.user_email || 'Unknown')}
                           className="text-sm font-medium text-rose-600 hover:text-rose-800 transition"
                         >
                           Remove
