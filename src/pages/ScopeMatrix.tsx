@@ -359,7 +359,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       }));
 
       console.log('ScopeMatrix: Created', mappings.length, 'mappings');
-      console.log('ScopeMatrix: Mappings with system_id:', mappings.filter(m => m.systemId).length);
+      console.log('ScopeMatrix: Sample mappings:', mappings.slice(0, 3));
+      const mappingsWithSystemId = mappings.filter(m => m.systemId);
+      console.log('ScopeMatrix: Mappings with system_id:', mappingsWithSystemId.length, '/', mappings.length);
+      if (mappingsWithSystemId.length > 0) {
+        console.log('ScopeMatrix: Sample mapped item:', mappingsWithSystemId[0]);
+      } else {
+        console.warn('ScopeMatrix: NO MAPPINGS FOUND! Items are not mapped to systems.');
+        console.warn('ScopeMatrix: Sample unmapped item:', mappings[0]);
+      }
 
       const provider = getModelRateProvider(projectId);
       await provider.loadSettings();

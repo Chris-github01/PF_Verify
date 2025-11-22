@@ -40,6 +40,7 @@ export async function compareAgainstModelHybrid(
 ): Promise<ComparisonRow[]> {
   console.log('compareAgainstModelHybrid: Processing', normalisedLines.length, 'lines');
   console.log('compareAgainstModelHybrid: Mappings:', mappings.length);
+  console.log('compareAgainstModelHybrid: Sample mapping:', mappings[0]);
 
   const comparisonRows: ComparisonRow[] = [];
   let skippedCount = 0;
@@ -48,7 +49,39 @@ export async function compareAgainstModelHybrid(
   for (const line of normalisedLines) {
     const mapping = mappings.find(m => m.quoteItemId === line.quoteItemId);
 
-    if (!mapping || !mapping.systemId) {
+    if (!mapping) {
+      console.warn('compareAgainstModelHybrid: No mapping found for quote item:', line.quoteItemId);
+      skippedCount++;
+      comparisonRows.push({
+        quoteId: line.quoteId,
+        quoteItemId: line.quoteItemId,
+        supplier: line.supplier,
+        systemId: 'UNMAPPED',
+        systemLabel: 'Unmapped Items',
+        section: line.section,
+        service: line.service || line.serviceType,
+        subclass: line.subclass,
+        frr: line.frr,
+        sizeBucket: line.size,
+        quantity: line.quantity,
+        unitRate: line.rate,
+        total: line.total,
+        modelRate: null,
+        componentCount: null,
+        variancePct: null,
+        flag: 'NA',
+      });
+      continue;
+    }
+
+    if (!mapping.systemId) {
+      if (skippedCount < 3) {
+        console.warn('compareAgainstModelHybrid: Mapping has no systemId:', {
+          quoteItemId: mapping.quoteItemId,
+          systemId: mapping.systemId,
+          systemLabel: mapping.systemLabel
+        });
+      }
       skippedCount++;
       comparisonRows.push({
         quoteId: line.quoteId,

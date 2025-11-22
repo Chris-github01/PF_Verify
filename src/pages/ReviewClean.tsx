@@ -138,33 +138,33 @@ function AttributesCell({
       {hasNewMapping ? (
         <div className="flex flex-wrap gap-1">
           {mappedServiceType && (
-            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold">
               {mappedServiceType}
             </span>
           )}
           {mappedSystem && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-semibold">
               {mappedSystem}
             </span>
           )}
           {mappedPenetration && (
-            <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium">
+            <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-900 font-semibold">
               {mappedPenetration}
             </span>
           )}
           {typeof mappingConfidence === "number" && (
-            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+            <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-900 font-semibold">
               {(mappingConfidence * 100).toFixed(0)}%
             </span>
           )}
         </div>
       ) : (
         <>
-          {size && <div className="text-gray-600">Size: {size}</div>}
-          {frr && <div className="text-gray-600">FRR: {frr}</div>}
-          {service && <div className="text-blue-600">Service: {service}</div>}
-          {subclass && <div className="text-gray-600">Type: {subclass}</div>}
-          {material && <div className="text-gray-600">Material: {material}</div>}
+          {size && <div className="text-gray-900 font-medium">Size: <span className="font-semibold">{size}</span></div>}
+          {frr && <div className="text-gray-900 font-medium">FRR: <span className="font-semibold">{frr}</span></div>}
+          {service && <div className="text-blue-800 font-medium">Service: <span className="font-semibold">{service}</span></div>}
+          {subclass && <div className="text-gray-900 font-medium">Type: <span className="font-semibold">{subclass}</span></div>}
+          {material && <div className="text-gray-900 font-medium">Material: <span className="font-semibold">{material}</span></div>}
         </>
       )}
     </div>
@@ -397,8 +397,8 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
         return {
           id: item.id,
-          system_id: mappingResult.systemId || '',
-          system_label: mappingResult.systemLabel || '',
+          system_id: mappingResult.systemId || null,
+          system_label: mappingResult.systemLabel || null,
           system_confidence: mappingResult.confidence,
           system_needs_review: mappingResult.needsReview,
           system_manual_override: false,
@@ -408,6 +408,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
       });
 
       console.log('mapAllItemsToSystems: Saving', updates.length, 'updates to database');
+      console.log('mapAllItemsToSystems: Sample update:', updates[0]);
+      const updatesWithSystem = updates.filter(u => u.system_id);
+      console.log('mapAllItemsToSystems: Items with system_id:', updatesWithSystem.length, '/', updates.length);
 
       for (const update of updates) {
         const { id, ...data } = update;
@@ -419,6 +422,20 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
         if (error) {
           console.error('mapAllItemsToSystems: Error updating item', id, error);
         }
+      }
+
+      console.log('mapAllItemsToSystems: Database updates complete. Verifying...');
+
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('quote_items')
+        .select('id, description, system_id, system_label, size, frr, service, subclass')
+        .eq('quote_id', selectedQuote)
+        .limit(5);
+
+      if (verifyData) {
+        console.log('mapAllItemsToSystems: Verification - Sample saved items:', verifyData);
+        const savedWithSystem = verifyData.filter(item => item.system_id);
+        console.log('mapAllItemsToSystems: Verification - Items with system_id:', savedWithSystem.length, '/', verifyData.length);
       }
 
       await updateProjectTimestamp();
