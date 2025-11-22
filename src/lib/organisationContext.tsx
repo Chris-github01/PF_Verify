@@ -64,6 +64,9 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       .eq('user_id', user.id)
       .eq('status', 'active');
 
+    console.log('[OrganisationContext] User:', user.id, user.email);
+    console.log('[OrganisationContext] Memberships query result:', { memberships, membershipError });
+
     if (membershipError) {
       console.error('Error loading memberships:', membershipError);
       setLoading(false);
@@ -74,25 +77,31 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     let orgsError = null;
 
     if (!memberships || memberships.length === 0) {
+      console.log('[OrganisationContext] No memberships found, checking platform admin status');
       // Check if user is a platform admin
-      const { data: adminCheck } = await supabase
+      const { data: adminCheck, error: adminError } = await supabase
         .from('platform_admins')
         .select('is_active')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .maybeSingle();
 
+      console.log('[OrganisationContext] Admin check result:', { adminCheck, adminError });
+
       if (adminCheck) {
+        console.log('[OrganisationContext] User is platform admin, loading all organisations');
         // Admin fallback: show all organisations
         const result = await supabase
           .from('organisations')
           .select('id, name, created_at, settings, status')
           .order('created_at', { ascending: false });
 
+        console.log('[OrganisationContext] All orgs query result:', { data: result.data, error: result.error });
         orgs = result.data;
         orgsError = result.error;
         setIsAdminView(true);
       } else {
+        console.log('[OrganisationContext] Not an admin and no memberships');
         // Not an admin and no memberships
         setOrganisations([]);
         setIsAdminView(false);
@@ -100,6 +109,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         return;
       }
     } else {
+      console.log('[OrganisationContext] User has memberships, loading their organisations');
       // User has memberships, load their organisations
       const orgIds = memberships.map(m => m.organisation_id);
 
@@ -108,6 +118,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         .select('id, name, created_at, settings, status')
         .in('id', orgIds);
 
+      console.log('[OrganisationContext] Orgs by membership query result:', { data: result.data, error: result.error });
       orgs = result.data;
       orgsError = result.error;
       setIsAdminView(false);
