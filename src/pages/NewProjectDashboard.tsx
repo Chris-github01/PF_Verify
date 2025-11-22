@@ -4,12 +4,13 @@ import {
   FolderOpen,
   X,
   FileText,
-  TrendingUp,
   Building2,
   Clock,
   CheckCircle,
   Circle,
-  ArrowRight
+  ArrowRight,
+  Layers,
+  Target
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { supabase } from '../lib/supabase';
@@ -36,8 +37,12 @@ interface StepStatus {
 
 interface ProjectStats {
   quoteCount: number;
-  totalValue: number;
   supplierCount: number;
+  systemsDetected: number;
+  systemsCovered: number;
+  coveragePercent: number;
+  completedSteps: number;
+  totalSteps: number;
   hasQuotes: boolean;
   hasReviewedItems: boolean;
   hasScopeMatrix: boolean;
@@ -64,8 +69,12 @@ export default function NewProjectDashboard({
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ProjectStats>({
     quoteCount: 0,
-    totalValue: 0,
     supplierCount: 0,
+    systemsDetected: 0,
+    systemsCovered: 0,
+    coveragePercent: 0,
+    completedSteps: 0,
+    totalSteps: 6,
     hasQuotes: false,
     hasReviewedItems: false,
     hasScopeMatrix: false,
@@ -88,12 +97,28 @@ export default function NewProjectDashboard({
     try {
       const { data: quotes } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount')
+        .select('id, supplier_name')
         .eq('project_id', projectId);
 
       const quoteCount = quotes?.length || 0;
-      const totalValue = quotes?.reduce((sum, q) => sum + (q.total_amount || 0), 0) || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
+
+      const { data: lineItems } = await supabase
+        .from('line_items')
+        .select('system_id')
+        .eq('project_id', projectId);
+
+      const allSystemIds = lineItems?.filter(item => item.system_id).map(item => item.system_id) || [];
+      const uniqueSystems = new Set(allSystemIds);
+      const systemsDetected = uniqueSystems.size;
+
+      const systemsWithQuotes = new Set(
+        lineItems?.filter(item => item.system_id).map(item => item.system_id) || []
+      );
+      const systemsCovered = systemsWithQuotes.size;
+      const coveragePercent = systemsDetected > 0
+        ? Math.round((systemsCovered / systemsDetected) * 100)
+        : 0;
 
       const { data: settings } = await supabase
         .from('project_settings')
@@ -109,8 +134,12 @@ export default function NewProjectDashboard({
 
       const newStats: ProjectStats = {
         quoteCount,
-        totalValue,
         supplierCount,
+        systemsDetected,
+        systemsCovered,
+        coveragePercent,
+        completedSteps: 0,
+        totalSteps: 6,
         hasQuotes: quoteCount > 0,
         hasReviewedItems: settings?.review_clean_completed || false,
         hasScopeMatrix: settings?.scope_matrix_completed || false,
@@ -165,6 +194,9 @@ export default function NewProjectDashboard({
         route: 'reports'
       },
     ];
+
+    const completedCount = updatedSteps.filter(s => s.status === 'completed').length;
+    setStats(prev => ({ ...prev, completedSteps: completedCount }));
     setSteps(updatedSteps);
   };
 
@@ -348,41 +380,66 @@ export default function NewProjectDashboard({
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
                   <div className="p-2 bg-blue-50 rounded">
                     <FileText className="text-blue-600" size={18} />
                   </div>
                   <div>
-                    <div className="text-[13px] text-gray-600 font-medium">Quotes</div>
+                    <div className="text-[13px] text-gray-600 font-medium">Quotes Imported</div>
                     <div className="text-2xl font-bold text-gray-900">{stats.quoteCount}</div>
                     <div className="text-[11px] text-gray-500">
-                      {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
+                      from {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-green-50 rounded">
-                    <TrendingUp className="text-green-600" size={18} />
+                  <div className="p-2 bg-violet-50 rounded">
+                    <Layers className="text-violet-600" size={18} />
                   </div>
                   <div>
-                    <div className="text-[13px] text-gray-600 font-medium">Total Value</div>
-                    <div className="text-2xl font-bold text-gray-900">
-                      ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    <div className="text-[13px] text-gray-600 font-medium">Systems Detected</div>
+                    <div className="text-2xl font-bold text-gray-900">{stats.systemsDetected}</div>
+                    <div className="text-[11px] text-gray-500">Unique systems in project</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className={`p-2 rounded ${
+                    stats.coveragePercent >= 80 ? 'bg-green-50' :
+                    stats.coveragePercent >= 50 ? 'bg-amber-50' :
+                    'bg-red-50'
+                  }`}>
+                    <Target className={
+                      stats.coveragePercent >= 80 ? 'text-green-600' :
+                      stats.coveragePercent >= 50 ? 'text-amber-600' :
+                      'text-red-600'
+                    } size={18} />
+                  </div>
+                  <div>
+                    <div className="text-[13px] text-gray-600 font-medium">Coverage</div>
+                    <div className={`text-2xl font-bold ${
+                      stats.coveragePercent >= 80 ? 'text-green-600' :
+                      stats.coveragePercent >= 50 ? 'text-amber-600' :
+                      'text-red-600'
+                    }`}>
+                      {stats.coveragePercent}%
                     </div>
-                    <div className="text-[11px] text-gray-500">Combined quote value</div>
+                    <div className="text-[11px] text-gray-500">
+                      {stats.systemsCovered}/{stats.systemsDetected} systems covered
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
                   <div className="p-2 bg-blue-50 rounded">
-                    <FolderOpen className="text-blue-600" size={18} />
+                    <CheckCircle className="text-blue-600" size={18} />
                   </div>
                   <div>
                     <div className="text-[13px] text-gray-600 font-medium">Progress</div>
                     <div className="text-2xl font-bold text-gray-900">
-                      {steps.filter(s => s.status === 'completed').length}/{steps.length}
+                      {stats.completedSteps}/{stats.totalSteps}
                     </div>
                     <div className="text-[11px] text-gray-500">Steps completed</div>
                   </div>
