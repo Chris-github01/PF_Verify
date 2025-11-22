@@ -173,6 +173,7 @@ function AttributesCell({
 
 export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext }: ReviewCleanProps) {
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [cleanableQuotes, setCleanableQuotes] = useState<Quote[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [editingItem, setEditingItem] = useState<string | null>(null);
@@ -230,8 +231,45 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
     if (!error && data) {
       setQuotes(data);
-      if (data.length > 0 && !selectedQuote) {
-        setSelectedQuote(data[0].id);
+
+      const { data: jobsData } = await supabase
+        .from('parsing_jobs')
+        .select('quote_id, status, error_message, parsed_lines')
+        .eq('project_id', projectId);
+
+      const jobMap = new Map();
+      if (jobsData) {
+        jobsData.forEach(job => {
+          if (job.quote_id) {
+            jobMap.set(job.quote_id, job);
+          }
+        });
+      }
+
+      const filtered = data.filter(quote => {
+        const job = jobMap.get(quote.id);
+        const itemCount = quote.items_count || 0;
+
+        if (itemCount === 0) return false;
+
+        if (job) {
+          const hasFailedChunks = job.error_message?.includes('chunks failed') || false;
+          const jobFailed = job.status === 'failed';
+
+          if (jobFailed || hasFailedChunks) return false;
+        }
+
+        return true;
+      });
+
+      setCleanableQuotes(filtered);
+
+      if (filtered.length > 0 && !selectedQuote) {
+        setSelectedQuote(filtered[0].id);
+      } else if (filtered.length === 0) {
+        setSelectedQuote(null);
+      } else if (selectedQuote && !filtered.find(q => q.id === selectedQuote)) {
+        setSelectedQuote(filtered[0].id);
       }
     }
     setLoading(false);
@@ -507,7 +545,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
   const handleProcessAllPendingQuotes = async () => {
     if (normalising || mapping || smartCleaning || processingAllQuotes) return;
 
-    const pendingQuotes = quotes.filter(q =>
+    const pendingQuotes = cleanableQuotes.filter(q =>
       q.status === 'imported' || q.status === 'pending' || q.status === 'error'
     );
 
@@ -811,31 +849,49 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-6">
+      {cleanableQuotes.length === 0 && !loading ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <AlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
+          <h3 className="text-xl font-bold text-gray-900 mb-2">No quotes ready to clean</h3>
+          <p className="text-gray-600 mb-6">
+            Import supplier quotes or fix failed imports on the Import Quotes page before continuing.
+          </p>
+          <button
+            onClick={() => window.location.href = '#/import'}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+          >
+            Go to Import Quotes
+          </button>
+          <p className="text-xs text-gray-500 mt-4">
+            Only successfully imported quotes with line items will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-12 gap-6">
         <div className="col-span-3">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-4 border-b border-gray-200">
               <h3 className="font-semibold text-gray-900">Quotes</h3>
             </div>
             <div className="divide-y divide-gray-200">
-              {quotes.map((quote) => (
+              {cleanableQuotes.map((quote) => (
                 <div
                   key={quote.id}
                   className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedQuote === quote.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                    selectedQuote === quote.id ? 'bg-gray-50 border-l-4 border-blue-600' : ''
                   }`}
                   onClick={() => setSelectedQuote(quote.id)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{quote.supplier_name}</p>
-                      <p className="text-sm text-gray-500 truncate">{quote.quote_reference || 'No ref'}</p>
+                      <p className="font-semibold text-gray-900 text-sm truncate">{quote.supplier_name}</p>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">{quote.quote_reference || 'No reference'}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-sm font-medium text-gray-900">
                           ${quote.total_amount.toLocaleString()}
                         </span>
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(quote.status as QuoteStatus)}`}>
-                          {getStatusLabel(quote.status as QuoteStatus)}
+                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-300">
+                          Ready to clean
                         </span>
                       </div>
                     </div>
@@ -844,9 +900,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
                         e.stopPropagation();
                         deleteQuote(quote.id);
                       }}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -880,7 +936,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
                   </button>
                   <button
                     onClick={handleProcessAllPendingQuotes}
-                    disabled={processingAllQuotes || normalising || mapping || smartCleaning || quotes.length === 0}
+                    disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.length === 0}
                     className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                     title="Process all pending/error quotes"
                   >
@@ -1153,6 +1209,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
           </div>
         </div>
       </div>
+      )}
 
       <WorkflowNav
         currentStep={2}
