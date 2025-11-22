@@ -15,6 +15,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import { PROJECT_WORKFLOW_STEPS, TOTAL_WORKFLOW_STEPS } from '../config/workflow';
 
 interface NewProjectDashboardProps {
   projectId: string | null;
@@ -72,7 +73,7 @@ export default function NewProjectDashboard({
     systemsCovered: 0,
     coveragePercent: 0,
     completedSteps: 0,
-    totalSteps: 6,
+    totalSteps: TOTAL_WORKFLOW_STEPS,
     hasQuotes: false,
     hasReviewedItems: false,
     hasScopeMatrix: false,
@@ -137,7 +138,7 @@ export default function NewProjectDashboard({
         systemsCovered,
         coveragePercent,
         completedSteps: 0,
-        totalSteps: 6,
+        totalSteps: TOTAL_WORKFLOW_STEPS,
         hasQuotes: quoteCount > 0,
         hasReviewedItems: settings?.review_clean_completed || false,
         hasScopeMatrix: settings?.scope_matrix_completed || false,
@@ -154,38 +155,34 @@ export default function NewProjectDashboard({
   };
 
   const updateStepStatuses = (projectStats: ProjectStats) => {
-    const updatedSteps: StepStatus[] = [
-      {
-        id: 'import',
-        name: 'Import Quotes',
-        status: projectStats.hasQuotes ? 'completed' : 'not_started',
-        route: 'quotes'
-      },
-      {
-        id: 'review',
-        name: 'Review & Clean',
-        status: projectStats.hasReviewedItems ? 'completed' : projectStats.hasQuotes ? 'in_progress' : 'not_started',
-        route: 'review-clean'
-      },
-      {
-        id: 'intelligence',
-        name: 'Quote Intelligence',
-        status: projectStats.hasReviewedItems ? 'completed' : 'not_started',
-        route: 'quote-intelligence'
-      },
-      {
-        id: 'matrix',
-        name: 'Scope Matrix',
-        status: projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started',
-        route: 'scope-matrix'
-      },
-      {
-        id: 'reports',
-        name: 'Reports',
-        status: projectStats.hasReports ? 'completed' : 'not_started',
-        route: 'reports'
-      },
-    ];
+    const updatedSteps: StepStatus[] = PROJECT_WORKFLOW_STEPS.map(step => {
+      let status: 'not_started' | 'in_progress' | 'completed' = 'not_started';
+
+      switch (step.id) {
+        case 'import':
+          status = projectStats.hasQuotes ? 'completed' : 'not_started';
+          break;
+        case 'review':
+          status = projectStats.hasReviewedItems ? 'completed' : projectStats.hasQuotes ? 'in_progress' : 'not_started';
+          break;
+        case 'matrix':
+          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
+          break;
+        case 'intelligence':
+          status = projectStats.hasReviewedItems ? 'completed' : 'not_started';
+          break;
+        case 'reports':
+          status = projectStats.hasReports ? 'completed' : 'not_started';
+          break;
+      }
+
+      return {
+        id: step.id,
+        name: step.name,
+        status,
+        route: step.route
+      };
+    });
 
     const completedCount = updatedSteps.filter(s => s.status === 'completed').length;
     setStats(prev => ({ ...prev, completedSteps: completedCount }));
