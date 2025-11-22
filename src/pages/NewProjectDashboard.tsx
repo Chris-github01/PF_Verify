@@ -345,6 +345,37 @@ export default function NewProjectDashboard({
               </div>
             </div>
 
+            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 mb-3">Project Workflow</h2>
+              <div className="space-y-2">
+                {steps.map((step, index) => (
+                  <button
+                    key={step.id}
+                    onClick={() => handleNavigateToStep(step.route)}
+                    className="w-full flex items-center gap-3 py-3 px-4 bg-gray-50 hover:bg-blue-50 rounded-lg transition-all border border-gray-200 hover:border-blue-300 hover:shadow-sm text-left group"
+                  >
+                    <div className="flex items-center justify-center w-7 h-7 rounded-full bg-white border border-gray-300 text-xs font-semibold text-gray-700 group-hover:border-blue-400 group-hover:text-blue-600 transition-colors flex-shrink-0">
+                      {index + 1}
+                    </div>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {step.status === 'completed' ? (
+                        <CheckCircle2 className="text-green-600 flex-shrink-0" size={20} />
+                      ) : step.status === 'in_progress' ? (
+                        <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={20} />
+                      ) : (
+                        <Circle className="text-gray-400 flex-shrink-0" size={20} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm">{step.name}</div>
+                        <div className="text-xs text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                      </div>
+                    </div>
+                    <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={16} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
                 <div className="flex items-center gap-3 mb-3">
@@ -383,37 +414,6 @@ export default function NewProjectDashboard({
                   {steps.filter(s => s.status === 'completed').length}/{steps.length}
                 </p>
                 <p className="text-xs text-gray-500">Steps completed</p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Project Workflow</h2>
-              <div className="space-y-2">
-                {steps.map((step, index) => (
-                  <button
-                    key={step.id}
-                    onClick={() => handleNavigateToStep(step.route)}
-                    className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-blue-50 rounded-lg transition-all border border-gray-200 hover:border-blue-300 hover:shadow-sm text-left group"
-                  >
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-300 text-sm font-semibold text-gray-700 group-hover:border-blue-400 group-hover:text-blue-600 transition-colors">
-                      {index + 1}
-                    </div>
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {step.status === 'completed' ? (
-                        <CheckCircle2 className="text-green-600 flex-shrink-0" size={22} />
-                      ) : step.status === 'in_progress' ? (
-                        <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={22} />
-                      ) : (
-                        <Circle className="text-gray-400 flex-shrink-0" size={22} />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 text-sm">{step.name}</div>
-                        <div className="text-xs text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
-                      </div>
-                    </div>
-                    <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={18} />
-                  </button>
-                ))}
               </div>
             </div>
           </div>
