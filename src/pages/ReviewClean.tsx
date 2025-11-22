@@ -131,14 +131,16 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
     }
   };
 
-  const normaliseAllItems = async () => {
+  const normaliseAllItems = async (itemsToProcess?: QuoteItem[]) => {
     if (!selectedQuote) return;
 
     setNormalising(true);
     setMessage({ type: 'info', text: 'Normalising items...' });
 
+    const targetItems = itemsToProcess || items;
+
     try {
-      const updates = items.map(item => {
+      const updates = targetItems.map(item => {
         const qty = normaliseNumber(item.quantity);
         const rate = normaliseNumber(item.unit_price);
         let total = normaliseNumber(item.total_price);
@@ -203,14 +205,16 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
     }
   };
 
-  const mapAllItemsToSystems = async () => {
+  const mapAllItemsToSystems = async (itemsToProcess?: QuoteItem[]) => {
     if (!selectedQuote) return;
 
     setMapping(true);
     setMessage({ type: 'info', text: 'Mapping items to systems...' });
 
+    const targetItems = itemsToProcess || items;
+
     try {
-      const updates = items.map(item => {
+      const updates = targetItems.map(item => {
         const mappingResult = matchLineToSystem({
           description: item.description,
           size: item.size,
@@ -258,17 +262,19 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
     }
   };
 
-  const smartClean = async () => {
+  const smartClean = async (itemsToProcess?: QuoteItem[]) => {
     if (!selectedQuote || normalising || mapping || smartCleaning) return;
 
     setSmartCleaning(true);
     setMessage({ type: 'info', text: 'Step 1/2: Normalising items...' });
 
+    const targetItems = itemsToProcess || items;
+
     try {
       let normaliseSuccess = true;
 
       try {
-        await normaliseAllItems();
+        await normaliseAllItems(targetItems);
       } catch (error) {
         console.error('Normalise step failed:', error);
         setMessage({ type: 'error', text: 'Normalise failed — please try again.' });
@@ -281,10 +287,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
       setMessage({ type: 'info', text: 'Step 2/2: Mapping items to systems...' });
 
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const { data: refreshedItems } = await supabase
+        .from('quote_items')
+        .select('*')
+        .eq('quote_id', selectedQuote)
+        .order('created_at', { ascending: true });
+
       let mappingSuccess = true;
 
       try {
-        await mapAllItemsToSystems();
+        await mapAllItemsToSystems(refreshedItems || targetItems);
       } catch (error) {
         console.error('Mapping step failed:', error);
         setMessage({ type: 'error', text: 'System mapping failed — please review items.' });
@@ -319,10 +333,22 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
         setMessage({ type: 'info', text: `Processing quote ${i + 1}/${quotes.length}: ${quote.supplier_name}` });
 
         setSelectedQuote(quote.id);
-        await loadItems(quote.id);
+
+        const { data: quoteItems } = await supabase
+          .from('quote_items')
+          .select('*')
+          .eq('quote_id', quote.id)
+          .order('created_at', { ascending: true });
+
+        if (!quoteItems || quoteItems.length === 0) {
+          console.warn(`No items found for quote ${quote.supplier_name}`);
+          continue;
+        }
+
+        setItems(quoteItems);
 
         try {
-          await smartClean();
+          await smartClean(quoteItems);
         } catch (error) {
           console.error(`Processing failed for quote ${quote.supplier_name}:`, error);
         }
