@@ -25,7 +25,6 @@ interface NewProjectDashboardProps {
   onNavigateToQuotes: () => void;
   onNavigateToMatrix: () => void;
   onNavigateToReports: () => void;
-  onNavigateToLibrary: () => void;
 }
 
 interface StepStatus {
@@ -58,7 +57,6 @@ export default function NewProjectDashboard({
   onNavigateToQuotes,
   onNavigateToMatrix,
   onNavigateToReports,
-  onNavigateToLibrary,
 }: NewProjectDashboardProps) {
   const { currentOrganisation } = useOrganisation();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -210,9 +208,6 @@ export default function NewProjectDashboard({
         break;
       case 'reports':
         onNavigateToReports();
-        break;
-      case 'library':
-        onNavigateToLibrary();
         break;
       default:
         console.log('Navigation to', route, 'not yet implemented');

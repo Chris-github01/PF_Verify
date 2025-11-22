@@ -14,8 +14,6 @@ import ScopeMatrix from './pages/ScopeMatrix';
 import ContractManager from './pages/ContractManager';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import InsightsDashboard from './pages/InsightsDashboard';
-import Library from './pages/Library';
-import ProjectTemplates from './pages/ProjectTemplates';
 import SystemCheck from './pages/SystemCheck';
 import CopilotAudit from './pages/CopilotAudit';
 import Settings from './pages/Settings';
@@ -44,7 +42,6 @@ function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<SidebarTab>('dashboard');
-  const [libraryView, setLibraryView] = useState<'hub' | 'templates'>('hub');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectInfo, setProjectInfo] = useState<ProjectInfo | null>(null);
   const [allProjects, setAllProjects] = useState<any[]>([]);
@@ -316,9 +313,6 @@ function AppContent() {
       case 'insights':
         setActiveTab('insights');
         break;
-      case 'library':
-        setActiveTab('library');
-        break;
       case 'settings':
         setActiveTab('settings');
         break;
@@ -345,7 +339,6 @@ function AppContent() {
           onNavigateToReports={() => {
             if (handleNavigationGuard('reports')) setActiveTab('reports');
           }}
-          onNavigateToLibrary={() => setActiveTab('library')}
         />;
 
       case 'quotes':
@@ -365,7 +358,6 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <EnhancedImportQuotes
@@ -392,7 +384,6 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <ReviewClean
@@ -421,7 +412,6 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <QuoteIntelligence
@@ -447,7 +437,6 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <ScopeMatrix
@@ -473,7 +462,6 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <ContractManager projectId={projectId} />;
@@ -495,7 +483,6 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <EnhancedReportsHub
@@ -522,16 +509,10 @@ function AppContent() {
             onNavigateToReports={() => {
               if (handleNavigationGuard('reports')) setActiveTab('reports');
             }}
-            onNavigateToLibrary={() => setActiveTab('library')}
           />;
         }
         return <InsightsDashboard projectId={projectId} />;
 
-      case 'library':
-        if (libraryView === 'templates') {
-          return <ProjectTemplates onBack={() => setLibraryView('hub')} onNavigateToNewProject={() => setProjectId(null)} />;
-        }
-        return <Library onNavigateToTemplates={() => setLibraryView('templates')} />;
 
       case 'systemcheck':
         return <SystemCheck />;
@@ -567,7 +548,6 @@ function AppContent() {
           onNavigateToReports={() => {
             if (handleNavigationGuard('reports')) setActiveTab('reports');
           }}
-          onNavigateToLibrary={() => setActiveTab('library')}
         />;
     }
   };
