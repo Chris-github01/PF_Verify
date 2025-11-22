@@ -527,7 +527,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
           </p>
           <button
             onClick={onNavigateToDashboard}
-            className="btn-primary inline-flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium inline-flex items-center gap-2"
           >
             Go to Project Dashboard
           </button>
@@ -645,7 +645,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
                     }
                   }}
                   disabled={parsing || !supplierName.trim()}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                 >
                   {parsing && <Loader2 className="animate-spin" size={18} />}
                   {parsing ? 'Starting Parse...' : 'Parse Quote (Background)'}
@@ -676,7 +676,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={parsing}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Attach File
               </button>
