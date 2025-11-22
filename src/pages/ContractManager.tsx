@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, Download, CheckCircle, AlertCircle, FileCheck } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import ExportDropdown from '../components/ExportDropdown';
 
 interface ContractManagerProps {
   projectId: string;
@@ -70,16 +71,52 @@ export default function ContractManager({ projectId, onNavigateBack }: ContractM
     }
   };
 
-  const handleExportHandoverPack = async () => {
+  const handleExport = async (mode: 'site' | 'commercial') => {
     if (!awardInfo) return;
 
     setExporting(true);
     try {
-      console.log('Exporting handover pack for project:', projectId);
-      alert('Handover pack export coming soon. This will generate a comprehensive PDF with all contract information.');
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          mode
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const result = await response.json();
+
+      const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
+      const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
+      const filename = mode === 'site'
+        ? `SiteScope_${projectName}_${timestamp}.html`
+        : `CommercialHandover_${projectName}_${timestamp}.html`;
+
+      const blob = new Blob([result.html], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      alert(`${mode === 'site' ? 'Site Scope Pack' : 'Commercial Handover Pack'} generated successfully! Open the HTML file and use your browser's Print to PDF function.`);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Failed to export handover pack. Please try again.');
+      alert('Could not generate export. Please try again or contact support.');
     } finally {
       setExporting(false);
     }
@@ -138,15 +175,11 @@ export default function ContractManager({ projectId, onNavigateBack }: ContractM
           <p className="text-gray-600">
             Manage your subcontract scope and handover information.
           </p>
-          <button
-            onClick={handleExportHandoverPack}
-            disabled={!hasAward || exporting}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            title={!hasAward ? 'Export is available after a supplier has been awarded.' : 'Export handover pack'}
-          >
-            <Download size={16} />
-            {exporting ? 'Exporting...' : 'Export Handover Pack'}
-          </button>
+          <ExportDropdown
+            disabled={!hasAward}
+            onExport={handleExport}
+            loading={exporting}
+          />
         </div>
       </div>
 
