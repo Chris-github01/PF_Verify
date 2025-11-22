@@ -35,13 +35,25 @@ interface QuoteInfo {
   quote_reference?: string;
   total_amount?: number;
   items_count: number;
+  mapped_items_count: number;
   parse_status?: 'completed' | 'failed' | 'partial' | 'pending' | 'processing';
   has_failed_chunks?: boolean;
+}
+
+interface MatrixDiagnostics {
+  totalItems: number;
+  itemsByQuote: Record<string, number>;
+  itemsWithSystemByQuote: Record<string, number>;
+  overlappingSystemsCount: number;
+  overlappingSystems: string[];
+  selectedQuoteIds: string[];
+  reason?: 'no_items' | 'no_mapped_items' | 'no_overlap' | 'success';
 }
 
 function isScopeMatrixReady(quote: QuoteInfo): boolean {
   return quote.parse_status === 'completed' &&
          quote.items_count > 0 &&
+         quote.mapped_items_count > 0 &&
          !quote.has_failed_chunks;
 }
 
@@ -63,6 +75,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(true);
+  const [diagnostics, setDiagnostics] = useState<MatrixDiagnostics | null>(null);
 
   const [filters, setFilters] = useState<MatrixFilters>({});
   const [availableFilters, setAvailableFilters] = useState({
@@ -116,7 +129,14 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
               .select('*', { count: 'exact', head: true })
               .eq('quote_id', quote.id);
 
+            const { count: mappedCount } = await supabase
+              .from('quote_items')
+              .select('*', { count: 'exact', head: true })
+              .eq('quote_id', quote.id)
+              .not('system_id', 'is', null);
+
             const itemCount = totalCount || 0;
+            const mappedItemsCount = mappedCount || 0;
             const hasFailedChunks = jobData?.error_message?.includes('chunks failed') || false;
 
             let parseStatus: 'completed' | 'failed' | 'partial' | 'pending' | 'processing' = 'completed';
@@ -138,6 +158,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
               quote_reference: quote.quote_reference,
               total_amount: quote.total_amount,
               items_count: itemCount,
+              mapped_items_count: mappedItemsCount,
               parse_status: parseStatus,
               has_failed_chunks: hasFailedChunks,
             };
@@ -166,6 +187,48 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
     setIsGenerating(false);
 
     console.log('=== SCOPE MATRIX GENERATION END ===');
+  };
+
+  const buildMatrixDiagnostics = (itemsData: any[], quoteIds: string[]): MatrixDiagnostics => {
+    const itemsByQuote: Record<string, number> = {};
+    const itemsWithSystemByQuote: Record<string, number> = {};
+    const systemMap: Record<string, Set<string>> = {};
+
+    for (const item of itemsData) {
+      itemsByQuote[item.quote_id] = (itemsByQuote[item.quote_id] || 0) + 1;
+
+      if (item.system_id) {
+        itemsWithSystemByQuote[item.quote_id] = (itemsWithSystemByQuote[item.quote_id] || 0) + 1;
+
+        if (!systemMap[item.system_id]) {
+          systemMap[item.system_id] = new Set();
+        }
+        systemMap[item.system_id].add(item.quote_id);
+      }
+    }
+
+    const overlappingSystems = Object.entries(systemMap)
+      .filter(([, quoteSet]) => quoteSet.size >= 2)
+      .map(([systemId]) => systemId);
+
+    let reason: MatrixDiagnostics['reason'] = 'success';
+    if (itemsData.length === 0) {
+      reason = 'no_items';
+    } else if (Object.values(itemsWithSystemByQuote).every(count => count === 0)) {
+      reason = 'no_mapped_items';
+    } else if (overlappingSystems.length === 0) {
+      reason = 'no_overlap';
+    }
+
+    return {
+      totalItems: itemsData.length,
+      itemsByQuote,
+      itemsWithSystemByQuote,
+      overlappingSystemsCount: overlappingSystems.length,
+      overlappingSystems,
+      selectedQuoteIds: quoteIds,
+      reason
+    };
   };
 
   const loadData = async () => {
@@ -197,6 +260,18 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         setLoading(false);
         return;
       }
+
+      const diag = buildMatrixDiagnostics(itemsData, quoteIds);
+      setDiagnostics(diag);
+
+      console.log('=== SCOPE MATRIX DIAGNOSTICS ===');
+      console.log('Total Items:', diag.totalItems);
+      console.log('Items by Quote:', diag.itemsByQuote);
+      console.log('Items with System by Quote:', diag.itemsWithSystemByQuote);
+      console.log('Overlapping Systems Count:', diag.overlappingSystemsCount);
+      console.log('Overlapping Systems:', diag.overlappingSystems);
+      console.log('Reason:', diag.reason);
+      console.log('================================');
 
       console.log('ScopeMatrix: Loading data for project', projectId);
       console.log('ScopeMatrix: Found', quotesData.length, 'quotes and', itemsData.length, 'items');
@@ -577,7 +652,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-gray-900 text-sm">{quote.supplier_name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {quote.items_count} items • ${quote.total_amount?.toLocaleString() || '0'} • <span className="text-green-600 font-medium">Ready</span>
+                        {quote.items_count} items • {quote.mapped_items_count} mapped • ${quote.total_amount?.toLocaleString() || '0'} • <span className="text-green-600 font-medium">Ready</span>
                       </div>
                     </div>
                   </button>
@@ -634,29 +709,91 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           </div>
         )}
 
-        {hasGenerated && !loading && comparisonData.length === 0 && (
-          <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm">
-            <div className="text-center">
-              <AlertCircle className="mx-auto mb-4 text-amber-500" size={48} />
-              <p className="text-gray-900 text-lg font-semibold mb-2">No comparison data available for the selected quotes</p>
-              <p className="text-gray-600 mb-4">
-                This usually means the quote items haven't been fully processed yet.
-              </p>
-              <div className="text-left max-w-md mx-auto bg-gray-50 rounded-lg p-4 text-sm">
-                <p className="font-semibold text-gray-900 mb-2">Please check:</p>
-                <ul className="space-y-1 text-gray-600">
-                  <li>1. Quotes have been imported</li>
-                  <li>2. Items have been normalised (Run "Process All Quotes" in Review & Clean)</li>
-                  <li>3. Items have been mapped to systems (system_id field populated)</li>
-                  <li>4. Model rates are configured for your organisation</li>
-                </ul>
+        {hasGenerated && !loading && comparisonData.length === 0 && (() => {
+          const d = diagnostics;
+          let title = "No comparison data available";
+          let description = "Unable to generate scope matrix for the selected quotes.";
+          let actionText = "Go to Review & Clean";
+          let actionUrl = "#/review-clean";
+
+          if (d?.reason === 'no_items') {
+            title = "No processed items found";
+            description = "We couldn't find any processed line items for the selected suppliers. Make sure quotes have been imported and processing completed successfully.";
+            actionText = "Check Import Status";
+            actionUrl = "#/import-quotes";
+          } else if (d?.reason === 'no_mapped_items') {
+            title = "Items aren't mapped to systems";
+            description = "The selected suppliers have items, but none are mapped to systems. Map items to systems in Review & Clean so they can be compared.";
+            actionText = "Go to Review & Clean";
+            actionUrl = "#/review-clean";
+          } else if (d?.reason === 'no_overlap') {
+            title = "No overlapping systems to compare";
+            description = "These suppliers don't share any systems, so there's nothing to compare. Try selecting different quotes or adjust system mapping in Review & Clean.";
+            actionText = "Go to Review & Clean";
+            actionUrl = "#/review-clean";
+          }
+
+          return (
+            <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm">
+              <div className="text-center">
+                <AlertCircle className="mx-auto mb-4 text-amber-500" size={48} />
+                <p className="text-gray-900 text-lg font-semibold mb-2">{title}</p>
+                <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+                  {description}
+                </p>
+
+                {d && (
+                  <div className="text-left max-w-2xl mx-auto bg-gray-50 rounded-lg p-4 text-sm mb-6">
+                    <p className="font-semibold text-gray-900 mb-3">Diagnostics:</p>
+                    <div className="space-y-2 text-gray-700">
+                      <div className="flex justify-between">
+                        <span>Total items loaded:</span>
+                        <span className="font-medium">{d.totalItems}</span>
+                      </div>
+                      {Object.entries(d.itemsByQuote).map(([quoteId, count]) => {
+                        const quote = availableQuotes.find(q => q.id === quoteId);
+                        const mappedCount = d.itemsWithSystemByQuote[quoteId] || 0;
+                        return (
+                          <div key={quoteId} className="pl-4 border-l-2 border-gray-300">
+                            <div className="font-medium text-gray-900">{quote?.supplier_name || 'Unknown'}</div>
+                            <div className="text-xs text-gray-600">
+                              {count} items • {mappedCount} mapped to systems
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-between pt-2 border-t border-gray-300">
+                        <span>Overlapping systems:</span>
+                        <span className="font-medium">{d.overlappingSystemsCount}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center gap-3">
+                  <a
+                    href={actionUrl}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+                  >
+                    {actionText}
+                  </a>
+                  <button
+                    onClick={() => {
+                      console.log('=== DETAILED DIAGNOSTICS ===');
+                      console.log('Full diagnostics object:', diagnostics);
+                      console.log('Available quotes:', availableQuotes);
+                      console.log('Selected quote IDs:', selectedQuoteIds);
+                      alert('Diagnostic information logged to console (F12)');
+                    }}
+                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Show Console Details
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mt-4">
-                Check the browser console (F12) for detailed diagnostic information.
-              </p>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {hasGenerated && !loading && comparisonData.length > 0 && (
           <div className="space-y-4">
