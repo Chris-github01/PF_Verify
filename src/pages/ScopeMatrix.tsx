@@ -120,10 +120,16 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   const handleGenerateMatrix = async () => {
     if (selectedQuoteIds.length === 0) return;
 
+    console.log('=== SCOPE MATRIX GENERATION START ===');
+    console.log('Selected Quote IDs:', selectedQuoteIds);
+    console.log('Project ID:', projectId);
+
     setIsGenerating(true);
     await loadData();
     setHasGenerated(true);
     setIsGenerating(false);
+
+    console.log('=== SCOPE MATRIX GENERATION END ===');
   };
 
   const loadData = async () => {
@@ -151,8 +157,19 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         .in('quote_id', quoteIds);
 
       if (!itemsData) {
+        console.error('ScopeMatrix: No items data returned from database');
         setLoading(false);
         return;
+      }
+
+      console.log('ScopeMatrix: Loading data for project', projectId);
+      console.log('ScopeMatrix: Found', quotesData.length, 'quotes and', itemsData.length, 'items');
+
+      const itemsWithSystemId = itemsData.filter(item => item.system_id);
+      console.log('ScopeMatrix: Items with system_id:', itemsWithSystemId.length);
+
+      if (itemsWithSystemId.length === 0) {
+        console.warn('ScopeMatrix: WARNING - No items have system_id mapped! Matrix will be empty.');
       }
 
       const missingQtySet = new Set(
@@ -161,9 +178,6 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           .map(item => item.id)
       );
       setItemsWithMissingQty(missingQtySet);
-
-      console.log('ScopeMatrix: Loading data for project', projectId);
-      console.log('ScopeMatrix: Found', quotesData.length, 'quotes and', itemsData.length, 'items');
 
       const normalisedLines = itemsData.map(item => {
         const quote = quotesData.find(q => q.id === item.quote_id);
@@ -217,10 +231,17 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       console.log('ScopeMatrix: Generated', comparisons.length, 'comparison rows');
       if (comparisons.length > 0) {
         console.log('ScopeMatrix: Sample comparison:', comparisons[0]);
+        const uniqueSuppliers = Array.from(new Set(comparisons.map(c => c.supplier)));
+        console.log('ScopeMatrix: Unique suppliers in comparisons:', uniqueSuppliers);
+      } else {
+        console.error('ScopeMatrix: ERROR - compareAgainstModelHybrid returned 0 rows!');
+        console.log('ScopeMatrix: Check if items have system_id and if model rates are configured');
       }
 
       setComparisonData(comparisons);
       extractAvailableFilters(comparisons);
+
+      console.log('ScopeMatrix: comparisonData state set with', comparisons.length, 'rows');
 
       await supabase
         .from('project_settings')
@@ -232,7 +253,12 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           onConflict: 'project_id'
         });
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('ScopeMatrix: Error loading data:', error);
+      console.error('ScopeMatrix: Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      setComparisonData([]);
     } finally {
       setLoading(false);
     }
@@ -263,7 +289,10 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   };
 
   const buildMatrix = () => {
+    console.log('=== BUILD MATRIX START ===');
     console.log('buildMatrix: Starting with', comparisonData.length, 'comparison rows');
+    console.log('buildMatrix: Has generated:', hasGenerated);
+    console.log('buildMatrix: Active filters:', filters);
     let filteredData = comparisonData;
 
     if (filters.section) {
@@ -330,9 +359,12 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
     console.log('buildMatrix: Generated', rows.length, 'matrix rows');
     if (rows.length > 0) {
       console.log('buildMatrix: Sample row:', rows[0]);
+    } else {
+      console.warn('buildMatrix: WARNING - No matrix rows generated! Check comparison data and filters.');
     }
 
     setMatrixRows(rows);
+    console.log('=== BUILD MATRIX END ===');
   };
 
   const exportToCSV = () => {
@@ -556,11 +588,26 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         )}
 
         {hasGenerated && !loading && comparisonData.length === 0 && (
-          <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm text-center">
-            <p className="text-gray-500 text-lg mb-2">No comparison data available for the selected quotes.</p>
-            <p className="text-gray-400">
-              Please check that the quotes are fully normalised and mapped in Review & Clean.
-            </p>
+          <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm">
+            <div className="text-center">
+              <AlertCircle className="mx-auto mb-4 text-amber-500" size={48} />
+              <p className="text-gray-900 text-lg font-semibold mb-2">No comparison data available for the selected quotes</p>
+              <p className="text-gray-600 mb-4">
+                This usually means the quote items haven't been fully processed yet.
+              </p>
+              <div className="text-left max-w-md mx-auto bg-gray-50 rounded-lg p-4 text-sm">
+                <p className="font-semibold text-gray-900 mb-2">Please check:</p>
+                <ul className="space-y-1 text-gray-600">
+                  <li>1. Quotes have been imported</li>
+                  <li>2. Items have been normalised (Run "Process All Quotes" in Review & Clean)</li>
+                  <li>3. Items have been mapped to systems (system_id field populated)</li>
+                  <li>4. Model rates are configured for your organisation</li>
+                </ul>
+              </div>
+              <p className="text-sm text-gray-500 mt-4">
+                Check the browser console (F12) for detailed diagnostic information.
+              </p>
+            </div>
           </div>
         )}
 
