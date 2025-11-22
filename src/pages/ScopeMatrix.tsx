@@ -51,6 +51,16 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
     sizeBuckets: [] as string[],
   });
 
+  console.log('========== SCOPE MATRIX DEBUG ==========');
+  console.log('ScopeMatrix render:', {
+    projectId,
+    comparisonDataLength: comparisonData.length,
+    matrixRowsLength: matrixRows.length,
+    suppliersCount: suppliers.length,
+    loading,
+    hasFilters: Object.keys(filters).length > 0
+  });
+
   useEffect(() => {
     loadData();
   }, [projectId]);
@@ -194,6 +204,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   };
 
   const buildMatrix = () => {
+    console.log('buildMatrix: Starting with', comparisonData.length, 'comparison rows');
     let filteredData = comparisonData;
 
     if (filters.section) {
@@ -212,8 +223,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       filteredData = filteredData.filter(row => row.sizeBucket === filters.sizeBucket);
     }
 
+    console.log('buildMatrix: After filtering:', filteredData.length, 'rows');
+
     const uniqueSuppliers = Array.from(new Set(filteredData.map(row => row.supplier))).sort();
     setSuppliers(uniqueSuppliers);
+    console.log('buildMatrix: Found', uniqueSuppliers.length, 'suppliers:', uniqueSuppliers);
 
     const rowMap = new Map<string, MatrixRow>();
 
@@ -253,6 +267,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       if (b.systemId === 'UNMAPPED' && a.systemId !== 'UNMAPPED') return -1;
       return a.systemLabel.localeCompare(b.systemLabel);
     });
+
+    console.log('buildMatrix: Generated', rows.length, 'matrix rows');
+    if (rows.length > 0) {
+      console.log('buildMatrix: Sample row:', rows[0]);
+    }
 
     setMatrixRows(rows);
   };

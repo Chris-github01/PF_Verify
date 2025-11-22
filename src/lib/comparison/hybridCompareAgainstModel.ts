@@ -39,16 +39,40 @@ export async function compareAgainstModelHybrid(
   modelRateLookup: ModelRateLookup
 ): Promise<ComparisonRow[]> {
   console.log('compareAgainstModelHybrid: Processing', normalisedLines.length, 'lines');
+  console.log('compareAgainstModelHybrid: Mappings:', mappings.length);
 
   const comparisonRows: ComparisonRow[] = [];
+  let skippedCount = 0;
+  let mappedCount = 0;
 
   for (const line of normalisedLines) {
     const mapping = mappings.find(m => m.quoteItemId === line.quoteItemId);
 
     if (!mapping || !mapping.systemId) {
-      console.log('compareAgainstModelHybrid: Skipping line without system mapping:', line.quoteItemId);
+      skippedCount++;
+      comparisonRows.push({
+        quoteId: line.quoteId,
+        quoteItemId: line.quoteItemId,
+        supplier: line.supplier,
+        systemId: 'UNMAPPED',
+        systemLabel: 'Unmapped Items',
+        section: line.section,
+        service: line.service || line.serviceType,
+        subclass: line.subclass,
+        frr: line.frr,
+        sizeBucket: line.size,
+        quantity: line.quantity,
+        unitRate: line.rate,
+        total: line.total,
+        modelRate: null,
+        componentCount: null,
+        variancePct: null,
+        flag: 'NA',
+      });
       continue;
     }
+
+    mappedCount++;
 
     const criteria = {
       systemId: mapping.systemId,
@@ -100,5 +124,10 @@ export async function compareAgainstModelHybrid(
   }
 
   console.log('compareAgainstModelHybrid: Generated', comparisonRows.length, 'comparison rows');
+  console.log('compareAgainstModelHybrid: Mapped items:', mappedCount);
+  console.log('compareAgainstModelHybrid: Unmapped items:', skippedCount);
+  if (comparisonRows.length > 0) {
+    console.log('compareAgainstModelHybrid: Sample comparison row:', comparisonRows[0]);
+  }
   return comparisonRows;
 }
