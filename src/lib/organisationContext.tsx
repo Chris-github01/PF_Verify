@@ -58,27 +58,40 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
     const { data: memberships, error: membershipError } = await supabase
       .from('organisation_members')
-      .select(`
-        organisation_id,
-        organisations:organisation_id (
-          id,
-          name,
-          created_at,
-          settings,
-          status
-        )
-      `)
+      .select('organisation_id')
       .eq('user_id', user.id)
       .eq('status', 'active');
 
     if (membershipError) {
-      console.error('Error loading organisations:', membershipError);
+      console.error('Error loading memberships:', membershipError);
+      setLoading(false);
+      return;
     }
 
-    if (memberships) {
-      const orgs = memberships
-        .map((m: any) => m.organisations)
-        .filter(Boolean);
+    if (!memberships || memberships.length === 0) {
+      console.log('No active memberships found');
+      setOrganisations([]);
+      setLoading(false);
+      return;
+    }
+
+    const orgIds = memberships.map(m => m.organisation_id);
+    console.log('Organisation IDs:', orgIds);
+
+    const { data: orgs, error: orgsError } = await supabase
+      .from('organisations')
+      .select('id, name, created_at, settings, status')
+      .in('id', orgIds);
+
+    if (orgsError) {
+      console.error('Error loading organisations:', orgsError);
+      setLoading(false);
+      return;
+    }
+
+    console.log('Loaded organisations:', orgs);
+
+    if (orgs) {
       setOrganisations(orgs);
 
       const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');

@@ -23,6 +23,7 @@ import ToastContainer from './components/ToastContainer';
 import AppFooter from './components/AppFooter';
 import CopilotDrawer from './components/CopilotDrawer';
 import Login from './pages/Login';
+import ModeSelector from './pages/ModeSelector';
 import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
 import AdminApp from './pages/AdminApp';
@@ -42,6 +43,7 @@ interface ProjectInfo {
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [selectedMode, setSelectedMode] = useState<'admin' | 'app' | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>('dashboard');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectInfo, setProjectInfo] = useState<ProjectInfo | null>(null);
@@ -635,14 +637,37 @@ function AppContent() {
     return <AdminApp />;
   }
 
-  if (!currentOrganisation && organisations.length > 0) {
-    return <OrganisationPicker onOrganisationSelected={() => {}} />;
+  if (!selectedMode) {
+    return <ModeSelector onSelectMode={setSelectedMode} isMasterAdmin={isMasterAdmin} />;
+  }
+
+  if (selectedMode === 'admin') {
+    if (!isMasterAdmin) {
+      toastStore.show({
+        type: 'warning',
+        title: 'Access denied',
+        body: 'The Admin Console is only accessible to platform administrators.',
+        duration: 5000,
+      });
+      setSelectedMode(null);
+      return null;
+    }
+    return <AdminApp />;
   }
 
   if (!currentOrganisation) {
-    if (isMasterAdmin) {
-      return <AdminApp />;
+    if (organisations.length === 1) {
+      setCurrentOrganisation(organisations[0]);
+      return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Setting up your workspace...</p>
+          </div>
+        </div>
+      );
     }
+
     return <OrganisationPicker onOrganisationSelected={() => {}} />;
   }
 
