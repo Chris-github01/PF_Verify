@@ -227,7 +227,7 @@ function AppContent() {
 
     const { data: projects, error } = await supabase
       .from('projects')
-      .select('id, name, client, reference, updated_at, approved_quote_id, review_clean_done')
+      .select('id, name, client, reference, updated_at, approved_quote_id')
       .eq('organisation_id', currentOrganisation.id)
       .order('updated_at', { ascending: false });
 
@@ -254,7 +254,7 @@ function AppContent() {
 
           const hasMappedItems = quoteItems && quoteItems.some(item => item.system_id);
 
-          const workflowComplete = hasQuotes && allQuotesProcessed && p.review_clean_done && hasMappedItems;
+          const workflowComplete = hasQuotes && allQuotesProcessed && hasMappedItems;
 
           const { data: latestReport } = await supabase
             .from('award_reports')

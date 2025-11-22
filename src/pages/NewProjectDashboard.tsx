@@ -102,9 +102,9 @@ export default function NewProjectDashboard({
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
 
       const { data: lineItems } = await supabase
-        .from('line_items')
-        .select('system_id')
-        .eq('project_id', projectId);
+        .from('quote_items')
+        .select('system_id, quote_id')
+        .in('quote_id', quotes?.map(q => q.id) || []);
 
       const allSystemIds = lineItems?.filter(item => item.system_id).map(item => item.system_id) || [];
       const uniqueSystems = new Set(allSystemIds);
