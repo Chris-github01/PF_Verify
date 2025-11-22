@@ -212,8 +212,13 @@ export default function NewProjectDashboard({
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {projectId && (
+          <div className="mb-3">
+            <div className="text-xs text-gray-500 mb-1">Projects &gt; {projectName}</div>
+          </div>
+        )}
         <PageHeader
           title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
           subtitle={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
@@ -330,89 +335,91 @@ export default function NewProjectDashboard({
             <div className="text-gray-400">Loading project dashboard...</div>
           </div>
         ) : (
-          <div className="mt-4 space-y-4">
-            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Building2 size={16} />
-                  <span>{currentOrganisation?.name || 'Loading...'}</span>
+          <div className="mt-3 space-y-3">
+            <div className="flex items-center justify-between py-2 px-4 bg-white border-b border-gray-200">
+              <div className="flex items-center gap-2 text-[13px] text-gray-600">
+                <Building2 size={14} />
+                <span>{currentOrganisation?.name || 'Loading...'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[13px] text-gray-500">
+                <Clock size={13} />
+                <span>Last updated: {new Date().toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className="p-2 bg-blue-50 rounded">
+                    <FileText className="text-blue-600" size={18} />
+                  </div>
+                  <div>
+                    <div className="text-[13px] text-gray-600 font-medium">Quotes</div>
+                    <div className="text-2xl font-bold text-gray-900">{stats.quoteCount}</div>
+                    <div className="text-[11px] text-gray-500">
+                      {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Clock size={14} />
-                  <span>Last updated: {new Date().toLocaleDateString()}</span>
+
+                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className="p-2 bg-green-50 rounded">
+                    <TrendingUp className="text-green-600" size={18} />
+                  </div>
+                  <div>
+                    <div className="text-[13px] text-gray-600 font-medium">Total Value</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[11px] text-gray-500">Combined quote value</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className="p-2 bg-blue-50 rounded">
+                    <FolderOpen className="text-blue-600" size={18} />
+                  </div>
+                  <div>
+                    <div className="text-[13px] text-gray-600 font-medium">Progress</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {steps.filter(s => s.status === 'completed').length}/{steps.length}
+                    </div>
+                    <div className="text-[11px] text-gray-500">Steps completed</div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-              <h2 className="text-xl font-semibold text-gray-900 mb-3">Project Workflow</h2>
-              <div className="space-y-2">
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h2 className="text-[20px] font-semibold text-gray-900">Project Workflow</h2>
+              </div>
+              <div>
                 {steps.map((step, index) => (
                   <button
                     key={step.id}
                     onClick={() => handleNavigateToStep(step.route)}
-                    className="w-full flex items-center gap-3 py-3 px-4 bg-gray-50 hover:bg-blue-50 rounded-lg transition-all border border-gray-200 hover:border-blue-300 hover:shadow-sm text-left group"
+                    className="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left group"
                   >
-                    <div className="flex items-center justify-center w-7 h-7 rounded-full bg-white border border-gray-300 text-xs font-semibold text-gray-700 group-hover:border-blue-400 group-hover:text-blue-600 transition-colors flex-shrink-0">
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors flex-shrink-0">
                       {index + 1}
                     </div>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       {step.status === 'completed' ? (
-                        <CheckCircle2 className="text-green-600 flex-shrink-0" size={20} />
+                        <CheckCircle2 className="text-green-600 flex-shrink-0" size={18} />
                       ) : step.status === 'in_progress' ? (
-                        <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={20} />
+                        <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={18} />
                       ) : (
-                        <Circle className="text-gray-400 flex-shrink-0" size={20} />
+                        <Circle className="text-gray-400 flex-shrink-0" size={18} />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-900 text-[15px]">{step.name}</div>
-                        <div className="text-xs text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                        <div className="text-[11px] text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
                       </div>
                     </div>
-                    <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={16} />
+                    <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={14} />
                   </button>
                 ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <FileText className="text-blue-600" size={20} />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-700">Quotes</h3>
-                </div>
-                <p className="text-3xl font-bold text-gray-900 mb-1">{stats.quoteCount}</p>
-                <p className="text-xs text-gray-500">
-                  from {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <TrendingUp className="text-green-600" size={20} />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-700">Total Value</h3>
-                </div>
-                <p className="text-3xl font-bold text-gray-900 mb-1">
-                  ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-gray-500">Combined quote value</p>
-              </div>
-
-              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-purple-50 rounded-lg">
-                    <FolderOpen className="text-purple-600" size={20} />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-700">Progress</h3>
-                </div>
-                <p className="text-3xl font-bold text-gray-900 mb-1">
-                  {steps.filter(s => s.status === 'completed').length}/{steps.length}
-                </p>
-                <p className="text-xs text-gray-500">Steps completed</p>
               </div>
             </div>
           </div>

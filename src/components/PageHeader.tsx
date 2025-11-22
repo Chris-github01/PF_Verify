@@ -11,10 +11,10 @@ interface PageHeaderProps {
 
 export default function PageHeader({ title, subtitle, metadata }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between mb-4">
+    <div className="flex items-start justify-between mb-3">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-1">{title}</h1>
-        <p className="text-sm text-gray-600">{subtitle}</p>
+        <h1 className="text-[30px] font-bold text-gray-900 mb-1">{title}</h1>
+        <p className="text-[14px] text-gray-600">{subtitle}</p>
       </div>
 
       {metadata && metadata.length > 0 && (
