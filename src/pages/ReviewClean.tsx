@@ -132,12 +132,16 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
   };
 
   const normaliseAllItems = async (itemsToProcess?: QuoteItem[]) => {
-    if (!selectedQuote) return;
+    if (!selectedQuote) {
+      console.error('normaliseAllItems: No selectedQuote');
+      return;
+    }
 
     setNormalising(true);
     setMessage({ type: 'info', text: 'Normalising items...' });
 
     const targetItems = itemsToProcess || items;
+    console.log('normaliseAllItems: Processing', targetItems.length, 'items');
 
     try {
       const updates = targetItems.map(item => {
@@ -180,12 +184,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
         };
       });
 
+      console.log('normaliseAllItems: Saving', updates.length, 'updates to database');
+
       for (const update of updates) {
         const { id, ...data } = update;
-        await supabase
+        const { error } = await supabase
           .from('quote_items')
           .update(data)
           .eq('id', id);
+
+        if (error) {
+          console.error('normaliseAllItems: Error updating item', id, error);
+        }
       }
 
       await updateProjectTimestamp();
@@ -193,6 +203,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
       await loadQuotes();
 
       const lowConfidenceCount = updates.filter(u => u.confidence < 0.6).length;
+      console.log('normaliseAllItems: Complete!', updates.length, 'items,', lowConfidenceCount, 'low confidence');
       setMessage({
         type: 'success',
         text: `Normalisation complete! ${updates.length} items processed. ${lowConfidenceCount} items need review.`
@@ -206,12 +217,16 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
   };
 
   const mapAllItemsToSystems = async (itemsToProcess?: QuoteItem[]) => {
-    if (!selectedQuote) return;
+    if (!selectedQuote) {
+      console.error('mapAllItemsToSystems: No selectedQuote');
+      return;
+    }
 
     setMapping(true);
     setMessage({ type: 'info', text: 'Mapping items to systems...' });
 
     const targetItems = itemsToProcess || items;
+    console.log('mapAllItemsToSystems: Processing', targetItems.length, 'items');
 
     try {
       const updates = targetItems.map(item => {
@@ -236,12 +251,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
         };
       });
 
+      console.log('mapAllItemsToSystems: Saving', updates.length, 'updates to database');
+
       for (const update of updates) {
         const { id, ...data } = update;
-        await supabase
+        const { error } = await supabase
           .from('quote_items')
           .update(data)
           .eq('id', id);
+
+        if (error) {
+          console.error('mapAllItemsToSystems: Error updating item', id, error);
+        }
       }
 
       await updateProjectTimestamp();
@@ -250,6 +271,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
 
       const needsReviewCount = updates.filter(u => u.system_needs_review).length;
       const mappedCount = updates.filter(u => u.system_id).length;
+      console.log('mapAllItemsToSystems: Complete!', mappedCount, '/', updates.length, 'mapped,', needsReviewCount, 'need review');
       setMessage({
         type: 'success',
         text: `Mapping complete! ${mappedCount}/${updates.length} items mapped. ${needsReviewCount} need review.`
@@ -325,11 +347,15 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
     if (normalising || mapping || smartCleaning || processingAllQuotes) return;
     if (quotes.length === 0) return;
 
+    console.log('========== PROCESS ALL QUOTES STARTED ==========');
+    console.log('Processing', quotes.length, 'quotes');
+
     setProcessingAllQuotes(true);
 
     try {
       for (let i = 0; i < quotes.length; i++) {
         const quote = quotes[i];
+        console.log(`\n--- Processing quote ${i + 1}/${quotes.length}: ${quote.supplier_name} ---`);
         setMessage({ type: 'info', text: `Processing quote ${i + 1}/${quotes.length}: ${quote.supplier_name}` });
 
         setSelectedQuote(quote.id);
@@ -345,15 +371,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
           continue;
         }
 
+        console.log('Loaded', quoteItems.length, 'items for quote', quote.supplier_name);
         setItems(quoteItems);
 
         try {
           await smartClean(quoteItems);
+          console.log('Successfully processed quote:', quote.supplier_name);
         } catch (error) {
           console.error(`Processing failed for quote ${quote.supplier_name}:`, error);
         }
       }
 
+      console.log('\n========== PROCESS ALL QUOTES COMPLETE ==========');
       setMessage({ type: 'success', text: 'All quotes processed successfully.' });
     } catch (error) {
       console.error('Process All Quotes error:', error);
