@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import type { NormalisedBOQRow } from '../../types/import.types';
 import { detectServiceTypesInBatch } from '../quoteIntelligence/aiServiceDetector';
+import { reconcileQuoteTotal } from '../validation/quoteValidator';
 
 function extractServiceFromDescription(description: string): string {
   const upperDesc = description.toUpperCase();
@@ -151,6 +152,28 @@ export async function saveBOQToDatabase(
       }
 
       console.log('[BOQ Saver] Quote items created', { itemCount: insertedItems?.length });
+
+      console.log('[BOQ Saver] Running reconciliation check...');
+      try {
+        const reconciliationResult = await reconcileQuoteTotal(quote.id);
+        console.log('[BOQ Saver] Reconciliation result', {
+          quoteId: quote.id,
+          status: reconciliationResult.status,
+          variance: reconciliationResult.variancePercent,
+          notes: reconciliationResult.notes
+        });
+
+        if (reconciliationResult.status === 'failed') {
+          console.warn('[BOQ Saver] ⚠️  RECONCILIATION FAILED', {
+            supplierName,
+            extractedTotal: reconciliationResult.extractedTotal,
+            pdfTotal: reconciliationResult.pdfTotal,
+            variancePercent: (reconciliationResult.variancePercent * 100).toFixed(2) + '%'
+          });
+        }
+      } catch (reconciliationError) {
+        console.error('[BOQ Saver] Reconciliation check failed', reconciliationError);
+      }
 
       suppliersCreated++;
     }

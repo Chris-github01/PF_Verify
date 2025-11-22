@@ -393,3 +393,96 @@ export class QuoteValidator {
 }
 
 export const quoteValidator = new QuoteValidator();
+
+import { supabase } from '../supabase';
+
+export interface ReconciliationResult {
+  quoteId: string;
+  extractedTotal: number;
+  pdfTotal: number;
+  varianceAmount: number;
+  variancePercent: number;
+  status: 'passed' | 'failed' | 'pending';
+  notes: string;
+}
+
+export async function reconcileQuoteTotal(quoteId: string): Promise<ReconciliationResult> {
+  const { data, error } = await supabase.rpc('check_quote_reconciliation', {
+    quote_id_param: quoteId
+  });
+
+  if (error) {
+    console.error('Reconciliation check failed:', error);
+    throw new Error(`Failed to reconcile quote: ${error.message}`);
+  }
+
+  return {
+    quoteId: data.quote_id,
+    extractedTotal: parseFloat(data.extracted_total || 0),
+    pdfTotal: parseFloat(data.pdf_total || 0),
+    varianceAmount: parseFloat(data.variance_amount || 0),
+    variancePercent: parseFloat(data.variance_percent || 0),
+    status: data.status,
+    notes: data.notes
+  };
+}
+
+export async function reconcileProjectQuotes(projectId: string): Promise<ReconciliationResult[]> {
+  const { data, error } = await supabase.rpc('check_project_reconciliation', {
+    project_id_param: projectId
+  });
+
+  if (error) {
+    console.error('Project reconciliation failed:', error);
+    throw new Error(`Failed to reconcile project quotes: ${error.message}`);
+  }
+
+  return data.results.map((result: any) => ({
+    quoteId: result.quote_id,
+    extractedTotal: parseFloat(result.extracted_total || 0),
+    pdfTotal: parseFloat(result.pdf_total || 0),
+    varianceAmount: parseFloat(result.variance_amount || 0),
+    variancePercent: parseFloat(result.variance_percent || 0),
+    status: result.status,
+    notes: result.notes
+  }));
+}
+
+export async function getQuotesNeedingReview(organisationId?: string) {
+  let query = supabase
+    .from('quotes_needing_review')
+    .select('*')
+    .order('reconciliation_variance', { ascending: false });
+
+  if (organisationId) {
+    query = query.eq('organisation_id', organisationId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Failed to fetch quotes needing review:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function manualOverrideReconciliation(
+  quoteId: string,
+  justification: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('quotes')
+    .update({
+      reconciliation_status: 'manual_override',
+      reconciliation_notes: `MANUAL OVERRIDE: ${justification}`,
+      reconciliation_checked_at: new Date().toISOString()
+    })
+    .eq('id', quoteId);
+
+  if (error) {
+    console.error('Failed to override reconciliation:', error);
+    throw error;
+  }
+}

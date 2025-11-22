@@ -16,6 +16,10 @@ interface Quote {
   total_amount: number;
   items_count: number;
   status: string;
+  quoted_total?: number;
+  reconciliation_status?: string;
+  reconciliation_variance?: number;
+  reconciliation_notes?: string;
 }
 
 interface QuoteItem {
@@ -508,8 +512,37 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
     );
   }
 
+  const selectedQuoteData = quotes.find(q => q.id === selectedQuote);
+  const showReconciliationAlert = selectedQuoteData?.reconciliation_status === 'failed';
+
   return (
     <div className="space-y-6">
+      {showReconciliationAlert && selectedQuoteData && (
+        <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={24} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-bold text-red-900 text-lg">⚠️ Totals Reconciliation Failed</h4>
+              <p className="text-red-800 mt-1">{selectedQuoteData.reconciliation_notes}</p>
+              <p className="text-red-700 mt-2 text-sm">
+                <strong>Variance:</strong> {((selectedQuoteData.reconciliation_variance || 0) * 100).toFixed(2)}%
+                {selectedQuoteData.quoted_total && (
+                  <>
+                    {' | '}
+                    <strong>PDF Total:</strong> ${selectedQuoteData.quoted_total.toLocaleString()}
+                    {' | '}
+                    <strong>Extracted Total:</strong> ${selectedQuoteData.total_amount.toLocaleString()}
+                  </>
+                )}
+              </p>
+              <p className="text-red-800 mt-3 font-medium">
+                This quote requires manual review. Possible causes: column swap, missing items, or incorrect extraction.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {message && (
         <div className={`p-4 rounded-md ${
           message.type === 'success' ? 'bg-green-50 text-green-800' :

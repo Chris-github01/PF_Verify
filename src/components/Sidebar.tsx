@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   Briefcase,
   Library,
+  AlertCircle,
 } from 'lucide-react';
 import { t } from '../i18n';
 import { useOrganisation } from '../lib/organisationContext';
@@ -22,6 +23,7 @@ export type SidebarTab =
   | 'dashboard'
   | 'quotes'
   | 'review'
+  | 'reviewqueue'
   | 'quoteintel'
   | 'scope'
   | 'contract'
@@ -41,6 +43,7 @@ const menuItems = [
   { id: 'dashboard' as SidebarTab, label: 'Project Dashboard', icon: LayoutDashboard },
   { id: 'quotes' as SidebarTab, label: 'Import Quotes', icon: FileText },
   { id: 'review' as SidebarTab, label: 'Review & Clean', icon: ClipboardCheck },
+  { id: 'reviewqueue' as SidebarTab, label: 'Review Queue', icon: AlertCircle },
   { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
   { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
   { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3 },
