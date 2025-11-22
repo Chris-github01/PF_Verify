@@ -362,7 +362,7 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
       const { error: quoteError } = await supabase
         .from('quotes')
         .update({
-          status: 'approved',
+          status: 'accepted',
           updated_at: new Date().toISOString()
         })
         .eq('id', quoteId);
