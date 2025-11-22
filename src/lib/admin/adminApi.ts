@@ -5,8 +5,12 @@ export interface OrganisationDashboard {
   id: string;
   name: string;
   trade_type: string;
+  licensed_trades: string[];
   subscription_status: string;
+  pricing_tier: string;
   trial_end_date: string | null;
+  monthly_quote_limit: number | null;
+  quotes_used_this_month: number;
   last_active_at: string | null;
   created_at: string;
   member_count: number;
@@ -183,3 +187,75 @@ export function getImpersonatedOrgId(): string | null {
 export function isImpersonating(): boolean {
   return !!localStorage.getItem('admin_impersonate_org');
 }
+
+export async function addTradeLicense(
+  organisationId: string,
+  trade: string
+): Promise<{ success: boolean; message: string; licensedTrades: string[] }> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.user.email) {
+    throw new Error('Not authenticated');
+  }
+
+  const { data, error } = await supabase.rpc('admin_add_trade_license', {
+    p_admin_email: session.user.email,
+    p_org_id: organisationId,
+    p_trade: trade
+  });
+
+  if (error) throw error;
+
+  return {
+    success: data.success,
+    message: data.message,
+    licensedTrades: data.licensed_trades
+  };
+}
+
+export async function removeTradeLicense(
+  organisationId: string,
+  trade: string
+): Promise<{ success: boolean; message: string; licensedTrades: string[] }> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.user.email) {
+    throw new Error('Not authenticated');
+  }
+
+  const { data, error } = await supabase.rpc('admin_remove_trade_license', {
+    p_admin_email: session.user.email,
+    p_org_id: organisationId,
+    p_trade: trade
+  });
+
+  if (error) throw error;
+
+  return {
+    success: data.success,
+    message: data.message,
+    licensedTrades: data.licensed_trades
+  };
+}
+
+export async function getTradePricing(): Promise<any> {
+  const { data, error } = await supabase.rpc('get_trade_pricing');
+
+  if (error) throw error;
+  return data;
+}
+
+export const TRADE_LABELS: Record<string, string> = {
+  'passive_fire': 'PassiveFire Verify+',
+  'electrical': 'Electrical Verify+',
+  'plumbing': 'Plumbing Verify+',
+  'mechanical': 'Mechanical Verify+',
+  'other': 'Other'
+};
+
+export const ALL_TRADES = [
+  { value: 'passive_fire', label: 'PassiveFire Verify+', price: 299, color: 'orange' },
+  { value: 'electrical', label: 'Electrical Verify+', price: 349, color: 'yellow' },
+  { value: 'plumbing', label: 'Plumbing Verify+', price: 329, color: 'blue' },
+  { value: 'mechanical', label: 'Mechanical Verify+', price: 399, color: 'green' }
+];

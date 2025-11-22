@@ -9,17 +9,20 @@ import {
   XCircle,
   Clock,
   TrendingUp,
-  FileText
+  FileText,
+  Shield
 } from 'lucide-react';
 import {
   getAllOrganisations,
   extendTrial,
   updateSubscriptionStatus,
   impersonateOrganisation,
+  TRADE_LABELS,
   type OrganisationDashboard
 } from '../../lib/admin/adminApi';
 import { logAdminAction } from '../../lib/admin/superAdminGuard';
 import PageHeader from '../../components/PageHeader';
+import TradeLicenseManager from '../../components/TradeLicenseManager';
 
 export default function SuperAdminDashboard() {
   const [orgs, setOrgs] = useState<OrganisationDashboard[]>([]);
@@ -27,6 +30,7 @@ export default function SuperAdminDashboard() {
   const [filter, setFilter] = useState<'all' | 'trial' | 'active' | 'expired'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [managingLicenses, setManagingLicenses] = useState<OrganisationDashboard | null>(null);
 
   useEffect(() => {
     loadOrganisations();
@@ -267,7 +271,7 @@ export default function SuperAdminDashboard() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Client</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Trade</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Licensed Trades</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Trial End</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Quotes</th>
@@ -288,7 +292,26 @@ export default function SuperAdminDashboard() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm text-gray-700">{getTradeLabel(org.trade_type)}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {org.licensed_trades && org.licensed_trades.length > 0 ? (
+                          org.licensed_trades.map(trade => (
+                            <span
+                              key={trade}
+                              className="inline-flex px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800"
+                            >
+                              {TRADE_LABELS[trade]?.replace(' Verify+', '') || trade}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-400">No trades</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setManagingLicenses(org)}
+                        className="text-xs text-blue-600 hover:text-blue-800 mt-1"
+                      >
+                        Manage Licenses
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getStatusColor(org.subscription_status)}`}>
@@ -367,6 +390,20 @@ export default function SuperAdminDashboard() {
           )}
         </div>
       </div>
+
+      {managingLicenses && (
+        <TradeLicenseManager
+          organisationId={managingLicenses.id}
+          organisationName={managingLicenses.name}
+          currentLicenses={managingLicenses.licensed_trades || []}
+          subscriptionStatus={managingLicenses.subscription_status}
+          onClose={() => setManagingLicenses(null)}
+          onUpdate={() => {
+            loadOrganisations();
+            setMessage({ type: 'success', text: 'Trade licenses updated' });
+          }}
+        />
+      )}
     </div>
   );
 }
