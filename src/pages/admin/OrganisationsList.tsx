@@ -55,9 +55,7 @@ export default function OrganisationsList() {
           let ownerEmail = '';
           if (owner) {
             const { data: profile } = await supabase
-              .from('profiles')
-              .select('email, full_name')
-              .eq('id', owner.user_id)
+              .rpc('get_user_details', { p_user_id: owner.user_id })
               .maybeSingle();
             ownerEmail = profile?.email || '';
           }

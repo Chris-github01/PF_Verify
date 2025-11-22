@@ -88,9 +88,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
       const membersWithDetails = await Promise.all(
         (memberData || []).map(async (member) => {
           const { data: profile } = await supabase
-            .from('profiles')
-            .select('email, full_name')
-            .eq('id', member.user_id)
+            .rpc('get_user_details', { p_user_id: member.user_id })
             .maybeSingle();
 
           if (member.role === 'owner') {
@@ -121,9 +119,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
             .eq('project_id', project.id);
 
           const { data: owner } = await supabase
-            .from('profiles')
-            .select('email')
-            .eq('id', project.user_id)
+            .rpc('get_user_details', { p_user_id: project.user_id })
             .maybeSingle();
 
           return {
