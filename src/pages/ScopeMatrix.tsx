@@ -34,13 +34,15 @@ interface QuoteInfo {
   supplier_name: string;
   quote_reference?: string;
   total_amount?: number;
-  is_normalized: boolean;
   items_count: number;
-  status?: string;
+  parse_status?: 'completed' | 'failed' | 'partial' | 'pending' | 'processing';
+  has_failed_chunks?: boolean;
 }
 
 function isScopeMatrixReady(quote: QuoteInfo): boolean {
-  return quote.is_normalized && quote.items_count > 0;
+  return quote.parse_status === 'completed' &&
+         quote.items_count > 0 &&
+         !quote.has_failed_chunks;
 }
 
 export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext }: ScopeMatrixProps) {
@@ -101,21 +103,43 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       if (quotesData) {
         const quotesWithStatus = await Promise.all(
           quotesData.map(async (quote) => {
-            const { count: mappedCount } = await supabase
-              .from('quote_items')
-              .select('*', { count: 'exact', head: true })
+            const { data: jobData } = await supabase
+              .from('parsing_jobs')
+              .select('status, error_message, parsed_lines')
               .eq('quote_id', quote.id)
-              .not('system_id', 'is', null);
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
             const { count: totalCount } = await supabase
               .from('quote_items')
               .select('*', { count: 'exact', head: true })
               .eq('quote_id', quote.id);
 
+            const itemCount = totalCount || 0;
+            const hasFailedChunks = jobData?.error_message?.includes('chunks failed') || false;
+
+            let parseStatus: 'completed' | 'failed' | 'partial' | 'pending' | 'processing' = 'completed';
+            if (jobData) {
+              if (jobData.status === 'completed' && itemCount === 0) {
+                parseStatus = 'failed';
+              } else if (jobData.status === 'completed' && hasFailedChunks) {
+                parseStatus = 'partial';
+              } else if (jobData.status === 'failed') {
+                parseStatus = 'failed';
+              } else {
+                parseStatus = jobData.status as any;
+              }
+            }
+
             return {
-              ...quote,
-              is_normalized: (mappedCount || 0) > 0,
-              items_count: totalCount || 0,
+              id: quote.id,
+              supplier_name: quote.supplier_name,
+              quote_reference: quote.quote_reference,
+              total_amount: quote.total_amount,
+              items_count: itemCount,
+              parse_status: parseStatus,
+              has_failed_chunks: hasFailedChunks,
             };
           })
         );
