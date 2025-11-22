@@ -651,19 +651,18 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
 
       const startCol = 3;
 
+      ws['!merges'] = [];
+
       for (let i = 0; i < suppliers.length; i++) {
         const supplierCol = startCol + (i * 2);
         const cellAddress = XLSX.utils.encode_cell({ r: 4, c: supplierCol });
 
-        if (!ws[cellAddress]) {
-          ws[cellAddress] = { t: 's', v: suppliers[i] };
-        } else {
-          ws[cellAddress].v = suppliers[i];
-        }
+        ws[cellAddress] = {
+          t: 's',
+          v: suppliers[i],
+          s: ws[cellAddress]?.s || {}
+        };
 
-        if (!ws['!merges']) {
-          ws['!merges'] = [];
-        }
         ws['!merges'].push({
           s: { r: 4, c: supplierCol },
           e: { r: 4, c: supplierCol + 1 }
@@ -672,11 +671,20 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         const unitRateCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol });
         const totalCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol + 1 });
 
-        if (!ws[unitRateCell]) ws[unitRateCell] = { t: 's', v: 'Unit Rate' };
-        if (!ws[totalCell]) ws[totalCell] = { t: 's', v: 'Total' };
+        ws[unitRateCell] = {
+          t: 's',
+          v: 'Unit Rate',
+          s: ws[unitRateCell]?.s || {}
+        };
+        ws[totalCell] = {
+          t: 's',
+          v: 'Total',
+          s: ws[totalCell]?.s || {}
+        };
       }
 
       const dataStartRow = 6;
+      const range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 5, c: 2 } };
 
       matrixRows.forEach((row, idx) => {
         const rowNum = dataStartRow + idx;
@@ -699,7 +707,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           const unitRateCol = startCol + (supplierIdx * 2);
           const totalCol = unitRateCol + 1;
 
-          if (cell && cell.unitRate !== null) {
+          if (cell && cell.unitRate !== null && !isNaN(cell.unitRate)) {
             ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
               t: 'n',
               v: cell.unitRate,
@@ -723,7 +731,12 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
             };
           }
         });
+
+        range.e.r = Math.max(range.e.r, rowNum);
+        range.e.c = Math.max(range.e.c, startCol + (suppliers.length * 2) - 1);
       });
+
+      ws['!ref'] = XLSX.utils.encode_range(range);
 
       const filename = `Itemized_Comparison_${projectId}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, filename);
