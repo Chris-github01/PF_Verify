@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, AlertTriangle, X } from 'lucide-react';
+import { isImpersonating, stopImpersonation } from './lib/admin/adminApi';
 import Sidebar, { SidebarTab } from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import NewProjectDashboard from './pages/NewProjectDashboard';
@@ -600,11 +601,35 @@ function AppContent() {
     );
   }
 
+  const isInAdminMode = isImpersonating();
+  const impersonatedOrg = isInAdminMode ? currentOrganisation : null;
+
   return (
     <div className="min-h-screen bg-gray-50 flex overflow-x-hidden">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       <div className="flex-1 flex flex-col max-w-full overflow-x-hidden">
+        {isInAdminMode && impersonatedOrg && (
+          <div className="bg-red-600 text-white px-6 py-3 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={20} />
+              <div>
+                <div className="font-bold">ADMIN MODE - Impersonating Client</div>
+                <div className="text-sm text-red-100">
+                  Viewing as: {impersonatedOrg.name}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => stopImpersonation()}
+              className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 rounded-md font-medium transition-colors"
+            >
+              <X size={16} />
+              Exit Admin Mode
+            </button>
+          </div>
+        )}
+
         <DashboardHeader
           currentProjectId={projectId || undefined}
           currentProjectName={projectInfo?.name}

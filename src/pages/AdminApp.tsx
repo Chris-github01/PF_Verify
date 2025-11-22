@@ -1,22 +1,46 @@
 import { useState, useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Users, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { isSuperAdmin } from '../lib/admin/superAdminGuard';
 import AdminDashboard from './admin/AdminDashboard';
 import OrganisationsList from './admin/OrganisationsList';
 import OrganisationDetail from './admin/OrganisationDetail';
 import CreateOrganisation from './admin/CreateOrganisation';
+import SuperAdminDashboard from './admin/SuperAdminDashboard';
+import CreateClient from './admin/CreateClient';
+import GlobalPDFVault from './admin/GlobalPDFVault';
 
-type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation';
+type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault';
 
 export default function AdminApp() {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
+
+  useEffect(() => {
+    checkSuperAdmin();
+  }, []);
+
+  const checkSuperAdmin = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user.email) {
+      setUserEmail(session.user.email);
+      setIsSuperAdminUser(isSuperAdmin(session.user.email));
+    }
+  };
 
   useEffect(() => {
     const path = window.location.pathname;
 
     if (path === '/admin' || path === '/admin/') {
-      setActiveView('dashboard');
+      setActiveView(isSuperAdminUser ? 'super-dashboard' : 'dashboard');
+    } else if (path === '/admin/dashboard') {
+      setActiveView('super-dashboard');
+    } else if (path === '/admin/clients/new') {
+      setActiveView('create-client');
+    } else if (path === '/admin/pdfs') {
+      setActiveView('pdf-vault');
     } else if (path === '/admin/organisations') {
       setActiveView('organisations');
     } else if (path === '/admin/organisations/new') {
@@ -28,7 +52,7 @@ export default function AdminApp() {
         setActiveView('organisation-detail');
       }
     }
-  }, []);
+  }, [isSuperAdminUser]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -37,6 +61,12 @@ export default function AdminApp() {
 
   const renderContent = () => {
     switch (activeView) {
+      case 'super-dashboard':
+        return <SuperAdminDashboard />;
+      case 'create-client':
+        return <CreateClient />;
+      case 'pdf-vault':
+        return <GlobalPDFVault />;
       case 'dashboard':
         return <AdminDashboard />;
       case 'organisations':
@@ -46,7 +76,7 @@ export default function AdminApp() {
       case 'create-organisation':
         return <CreateOrganisation />;
       default:
-        return <AdminDashboard />;
+        return isSuperAdminUser ? <SuperAdminDashboard /> : <AdminDashboard />;
     }
   };
 
@@ -65,7 +95,34 @@ export default function AdminApp() {
           </div>
         </div>
 
-        <nav className="flex-1 p-4">
+        <nav className="flex-1 p-4 space-y-1">
+          {isSuperAdminUser && (
+            <>
+              <button
+                onClick={() => (window.location.href = '/admin/dashboard')}
+                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeView === 'super-dashboard'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Users size={18} />
+                Clients & Trials
+              </button>
+              <button
+                onClick={() => (window.location.href = '/admin/pdfs')}
+                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeView === 'pdf-vault'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <FileText size={18} />
+                PDF Vault
+              </button>
+              <div className="h-px bg-slate-200 my-2"></div>
+            </>
+          )}
           <button
             onClick={() => (window.location.href = '/admin')}
             className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${

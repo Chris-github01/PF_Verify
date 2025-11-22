@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase';
+import { getImpersonatedOrgId, isImpersonating } from './admin/adminApi';
 
 interface Organisation {
   id: string;
@@ -35,6 +36,24 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setLoading(false);
       return;
+    }
+
+    // Check if admin is impersonating
+    const impersonatedOrgId = getImpersonatedOrgId();
+    if (impersonatedOrgId) {
+      // Load the specific org for impersonation
+      const { data: org } = await supabase
+        .from('organisations')
+        .select('*')
+        .eq('id', impersonatedOrgId)
+        .single();
+
+      if (org) {
+        setOrganisations([org]);
+        setCurrentOrganisation(org);
+        setLoading(false);
+        return;
+      }
     }
 
     const { data: memberships } = await supabase
