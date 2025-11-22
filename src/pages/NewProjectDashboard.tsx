@@ -212,37 +212,38 @@ export default function NewProjectDashboard({
   };
 
   return (
-    <div className="p-8">
-      <PageHeader
-        title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
-        description={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
-      />
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <PageHeader
+          title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
+          description={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
+        />
 
-      {!projectId ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-            <button
-              onClick={handleCreateClick}
-              className="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-            >
-              <Plus className="mx-auto mb-2 text-gray-400" size={32} />
-              <div className="font-medium">Create New Project</div>
-            </button>
+        {!projectId ? (
+          <div className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <button
+                onClick={handleCreateClick}
+                className="p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <Plus className="mx-auto mb-2 text-gray-400" size={32} />
+                <div className="font-medium">Create New Project</div>
+              </button>
 
-          {allProjects.map((project) => (
-            <button
-              key={project.id}
-              onClick={() => onProjectSelect(project.id)}
-              className="p-6 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all text-left"
-            >
-              <FolderOpen className="mb-2 text-blue-600" size={24} />
-              <div className="font-semibold text-gray-900 mb-1">{project.name}</div>
-              <div className="text-sm text-gray-500">{project.client_reference}</div>
-            </button>
-          ))}
-        </div>
+              {allProjects.map((project) => (
+                <button
+                  key={project.id}
+                  onClick={() => onProjectSelect(project.id)}
+                  className="p-6 bg-white border border-gray-200 rounded-xl hover:border-blue-500 hover:shadow-lg transition-all text-left"
+                >
+                  <FolderOpen className="mb-2 text-blue-600" size={24} />
+                  <div className="font-semibold text-gray-900 mb-1">{project.name}</div>
+                  <div className="text-sm text-gray-500">{project.client_reference}</div>
+                </button>
+              ))}
+            </div>
 
-        {showCreateModal && (
+            {showCreateModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
               <div className="flex items-center justify-between mb-4">
@@ -322,97 +323,102 @@ export default function NewProjectDashboard({
               </form>
             </div>
           </div>
-        )}
-      </>
-      ) : loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-gray-400">Loading project dashboard...</div>
-        </div>
-      ) : (
-        <div className="space-y-6 mt-6">
-          <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-6 border border-blue-500/20">
-            <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-              <Building2 size={16} />
-              <span>Organisation: {currentOrganisation?.name || 'Loading...'}</span>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Project: {projectName || 'Unnamed Project'}</h2>
-            <div className="flex items-center gap-4 text-sm text-gray-600">
-              <div className="flex items-center gap-1">
-                <Clock size={14} />
+            )}
+          </div>
+        ) : loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-gray-400">Loading project dashboard...</div>
+          </div>
+        ) : (
+          <div className="mt-6 space-y-6">
+            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                <Building2 size={14} />
+                <span>Organisation: {currentOrganisation?.name || 'Loading...'}</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                {projectName || 'Unnamed Project'}
+              </h2>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Clock size={12} />
                 <span>Last updated: {new Date().toLocaleDateString()}</span>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <FileText className="text-blue-600" size={24} />
-                <h3 className="text-lg font-semibold text-gray-900">Quotes</h3>
-              </div>
-              <p className="text-3xl font-bold text-gray-900">{stats.quoteCount}</p>
-              <p className="text-sm text-gray-600 mt-1">
-                from {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
-              </p>
-            </div>
-
-            <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <TrendingUp className="text-green-600" size={24} />
-                <h3 className="text-lg font-semibold text-gray-900">Total Value</h3>
-              </div>
-              <p className="text-3xl font-bold text-gray-900">
-                ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Combined quote value</p>
-            </div>
-
-            <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <FolderOpen className="text-purple-600" size={24} />
-                <h3 className="text-lg font-semibold text-gray-900">Progress</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-3xl font-bold text-gray-900">
-                  {steps.filter(s => s.status === 'completed').length}/{steps.length}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <FileText className="text-blue-600" size={20} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-700">Quotes</h3>
                 </div>
+                <p className="text-3xl font-bold text-gray-900 mb-1">{stats.quoteCount}</p>
+                <p className="text-xs text-gray-500">
+                  from {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
+                </p>
               </div>
-              <p className="text-sm text-gray-600 mt-1">Steps completed</p>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Project Workflow</h2>
-            <div className="space-y-3">
-              {steps.map((step, index) => (
-                <button
-                  key={step.id}
-                  onClick={() => handleNavigateToStep(step.route)}
-                  className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200 hover:border-blue-300 text-left"
-                >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-sm font-semibold text-gray-700">
-                    {index + 1}
+              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-green-50 rounded-lg">
+                    <TrendingUp className="text-green-600" size={20} />
                   </div>
-                  <div className="flex items-center gap-3 flex-1">
-                    {step.status === 'completed' ? (
-                      <CheckCircle2 className="text-green-600" size={24} />
-                    ) : step.status === 'in_progress' ? (
-                      <Circle className="text-blue-600 fill-blue-100" size={24} />
-                    ) : (
-                      <Circle className="text-gray-400" size={24} />
-                    )}
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">{step.name}</div>
-                      <div className="text-xs text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                  <h3 className="text-sm font-semibold text-gray-700">Total Value</h3>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 mb-1">
+                  ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-gray-500">Combined quote value</p>
+              </div>
+
+              <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <FolderOpen className="text-purple-600" size={20} />
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-700">Progress</h3>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 mb-1">
+                  {steps.filter(s => s.status === 'completed').length}/{steps.length}
+                </p>
+                <p className="text-xs text-gray-500">Steps completed</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Project Workflow</h2>
+              <div className="space-y-2">
+                {steps.map((step, index) => (
+                  <button
+                    key={step.id}
+                    onClick={() => handleNavigateToStep(step.route)}
+                    className="w-full flex items-center gap-4 p-4 bg-gray-50 hover:bg-blue-50 rounded-lg transition-all border border-gray-200 hover:border-blue-300 hover:shadow-sm text-left group"
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-300 text-sm font-semibold text-gray-700 group-hover:border-blue-400 group-hover:text-blue-600 transition-colors">
+                      {index + 1}
                     </div>
-                  </div>
-                  <ArrowRight className="text-gray-400" size={20} />
-                </button>
-              ))}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {step.status === 'completed' ? (
+                        <CheckCircle2 className="text-green-600 flex-shrink-0" size={22} />
+                      ) : step.status === 'in_progress' ? (
+                        <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={22} />
+                      ) : (
+                        <Circle className="text-gray-400 flex-shrink-0" size={22} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm">{step.name}</div>
+                        <div className="text-xs text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                      </div>
+                    </div>
+                    <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={18} />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
