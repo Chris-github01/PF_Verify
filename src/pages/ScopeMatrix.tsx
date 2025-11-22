@@ -52,8 +52,7 @@ interface MatrixDiagnostics {
 
 function isScopeMatrixReady(quote: QuoteInfo): boolean {
   return quote.parse_status === 'completed' &&
-         quote.items_count > 0 &&
-         !quote.has_failed_chunks;
+         quote.items_count > 0;
 }
 
 export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext }: ScopeMatrixProps) {
@@ -163,6 +162,17 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
             };
           })
         );
+
+        console.log('=== LOADED QUOTES WITH STATUS ===');
+        quotesWithStatus.forEach(q => {
+          console.log(`${q.supplier_name}:`, {
+            items_count: q.items_count,
+            mapped_items_count: q.mapped_items_count,
+            parse_status: q.parse_status,
+            has_failed_chunks: q.has_failed_chunks
+          });
+        });
+        console.log('=================================');
 
         setAvailableQuotes(quotesWithStatus);
       }
@@ -566,6 +576,22 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   };
 
   const readyQuotes = availableQuotes.filter(isScopeMatrixReady);
+
+  console.log('=== SCOPE MATRIX QUOTE FILTERING ===');
+  console.log('Total available quotes:', availableQuotes.length);
+  console.log('Ready quotes:', readyQuotes.length);
+  availableQuotes.forEach(quote => {
+    const isReady = isScopeMatrixReady(quote);
+    console.log(`Quote "${quote.supplier_name}":`, {
+      isReady,
+      parse_status: quote.parse_status,
+      items_count: quote.items_count,
+      mapped_items_count: quote.mapped_items_count,
+      has_failed_chunks: quote.has_failed_chunks
+    });
+  });
+  console.log('====================================');
+
   const allSelected = readyQuotes.length > 0 && selectedQuoteIds.length === readyQuotes.length;
 
   return (
