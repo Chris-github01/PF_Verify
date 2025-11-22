@@ -27,10 +27,9 @@ export default function ProjectReportPage({
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('reports')
+        .from('award_reports')
         .select('id')
         .eq('project_id', projectId)
-        .eq('report_type', 'award_recommendation')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
