@@ -899,11 +899,25 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
                   </a>
                   <button
                     onClick={() => {
-                      console.log('=== DETAILED DIAGNOSTICS ===');
-                      console.log('Full diagnostics object:', diagnostics);
-                      console.log('Available quotes:', availableQuotes);
-                      console.log('Selected quote IDs:', selectedQuoteIds);
-                      alert('Diagnostic information logged to console (F12)');
+                      console.clear();
+                      console.log('═══════════════════════════════════════════════════');
+                      console.log('🔍 SCOPE MATRIX DETAILED DIAGNOSTICS');
+                      console.log('═══════════════════════════════════════════════════');
+                      console.log('');
+                      console.log('📊 Full diagnostics object:', diagnostics);
+                      console.log('');
+                      console.log('📋 Available quotes:', availableQuotes);
+                      console.log('');
+                      console.log('✅ Selected quote IDs:', selectedQuoteIds);
+                      console.log('');
+                      console.log('📦 Comparison data length:', comparisonData.length);
+                      console.log('');
+                      console.log('🎯 Matrix rows length:', matrixRows.length);
+                      console.log('');
+                      console.log('🏭 Suppliers:', suppliers);
+                      console.log('');
+                      console.log('═══════════════════════════════════════════════════');
+                      alert('✅ Console cleared and diagnostic details logged!\n\nPress F12 or right-click > Inspect > Console to view the detailed information.');
                     }}
                     className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                   >
