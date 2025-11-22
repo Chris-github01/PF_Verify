@@ -56,10 +56,24 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const { data: memberships } = await supabase
+    const { data: memberships, error: membershipError } = await supabase
       .from('organisation_members')
-      .select('organisation_id, organisations(*)')
-      .eq('user_id', user.id);
+      .select(`
+        organisation_id,
+        organisations:organisation_id (
+          id,
+          name,
+          created_at,
+          settings,
+          status
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    if (membershipError) {
+      console.error('Error loading organisations:', membershipError);
+    }
 
     if (memberships) {
       const orgs = memberships
