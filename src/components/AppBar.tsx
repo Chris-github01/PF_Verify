@@ -57,7 +57,7 @@ export default function AppBar({
             </h1>
 
             {currentProjectId && currentProjectName && (
-              <div className="text-sm text-gray-600 ml-4">
+              <div className="text-xs text-gray-500 ml-4 hidden md:block">
                 {currentProjectName}
               </div>
             )}

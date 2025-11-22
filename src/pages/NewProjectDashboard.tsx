@@ -216,7 +216,7 @@ export default function NewProjectDashboard({
       <div className="max-w-7xl mx-auto px-6 py-6">
         <PageHeader
           title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
-          description={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
+          subtitle={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
         />
 
         {!projectId ? (
@@ -330,23 +330,22 @@ export default function NewProjectDashboard({
             <div className="text-gray-400">Loading project dashboard...</div>
           </div>
         ) : (
-          <div className="mt-6 space-y-6">
-            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                <Building2 size={14} />
-                <span>Organisation: {currentOrganisation?.name || 'Loading...'}</span>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                {projectName || 'Unnamed Project'}
-              </h2>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <Clock size={12} />
-                <span>Last updated: {new Date().toLocaleDateString()}</span>
+          <div className="mt-4 space-y-4">
+            <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Building2 size={16} />
+                  <span>{currentOrganisation?.name || 'Loading...'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Clock size={14} />
+                  <span>Last updated: {new Date().toLocaleDateString()}</span>
+                </div>
               </div>
             </div>
 
             <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-              <h2 className="text-lg font-bold text-gray-900 mb-3">Project Workflow</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">Project Workflow</h2>
               <div className="space-y-2">
                 {steps.map((step, index) => (
                   <button
@@ -366,7 +365,7 @@ export default function NewProjectDashboard({
                         <Circle className="text-gray-400 flex-shrink-0" size={20} />
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 text-sm">{step.name}</div>
+                        <div className="font-medium text-gray-900 text-[15px]">{step.name}</div>
                         <div className="text-xs text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
                       </div>
                     </div>
@@ -382,7 +381,7 @@ export default function NewProjectDashboard({
                   <div className="p-2 bg-blue-50 rounded-lg">
                     <FileText className="text-blue-600" size={20} />
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-700">Quotes</h3>
+                  <h3 className="text-base font-semibold text-gray-700">Quotes</h3>
                 </div>
                 <p className="text-3xl font-bold text-gray-900 mb-1">{stats.quoteCount}</p>
                 <p className="text-xs text-gray-500">
@@ -395,7 +394,7 @@ export default function NewProjectDashboard({
                   <div className="p-2 bg-green-50 rounded-lg">
                     <TrendingUp className="text-green-600" size={20} />
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-700">Total Value</h3>
+                  <h3 className="text-base font-semibold text-gray-700">Total Value</h3>
                 </div>
                 <p className="text-3xl font-bold text-gray-900 mb-1">
                   ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
@@ -408,7 +407,7 @@ export default function NewProjectDashboard({
                   <div className="p-2 bg-purple-50 rounded-lg">
                     <FolderOpen className="text-purple-600" size={20} />
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-700">Progress</h3>
+                  <h3 className="text-base font-semibold text-gray-700">Progress</h3>
                 </div>
                 <p className="text-3xl font-bold text-gray-900 mb-1">
                   {steps.filter(s => s.status === 'completed').length}/{steps.length}
