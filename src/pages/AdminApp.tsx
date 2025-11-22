@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, Users, FileText } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isSuperAdmin } from '../lib/admin/superAdminGuard';
 import AdminDashboard from './admin/AdminDashboard';
@@ -9,8 +9,9 @@ import CreateOrganisation from './admin/CreateOrganisation';
 import SuperAdminDashboard from './admin/SuperAdminDashboard';
 import CreateClient from './admin/CreateClient';
 import GlobalPDFVault from './admin/GlobalPDFVault';
+import PlatformAdminUsers from './admin/PlatformAdminUsers';
 
-type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault';
+type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins';
 
 export default function AdminApp() {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
@@ -41,6 +42,8 @@ export default function AdminApp() {
       setActiveView('create-client');
     } else if (path === '/admin/pdfs') {
       setActiveView('pdf-vault');
+    } else if (path === '/admin/platform-admins') {
+      setActiveView('platform-admins');
     } else if (path === '/admin/organisations') {
       setActiveView('organisations');
     } else if (path === '/admin/organisations/new') {
@@ -67,6 +70,8 @@ export default function AdminApp() {
         return <CreateClient />;
       case 'pdf-vault':
         return <GlobalPDFVault />;
+      case 'platform-admins':
+        return <PlatformAdminUsers />;
       case 'dashboard':
         return <AdminDashboard />;
       case 'organisations':
@@ -144,6 +149,17 @@ export default function AdminApp() {
           >
             <Building2 size={18} />
             Organisations
+          </button>
+          <button
+            onClick={() => (window.location.href = '/admin/platform-admins')}
+            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
+              activeView === 'platform-admins'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <ShieldCheck size={18} />
+            Platform Admins
           </button>
         </nav>
 
