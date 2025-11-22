@@ -16,10 +16,16 @@ export default function ToastContainer() {
 
   useEffect(() => {
     const unsubscribe = toastStore.subscribe((newToasts) => {
-      setToasts(newToasts);
+      setToasts(newToasts.map(t => ({
+        id: t.id,
+        type: t.type,
+        title: t.title,
+        body: t.body || '',
+        duration: t.duration || 5000
+      })));
     });
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, []);
 
   const removeToast = (id: string) => {

@@ -47,6 +47,10 @@ class ToastStore {
     this.notify();
   }
 
+  remove(id: string) {
+    this.dismiss(id);
+  }
+
   clear() {
     this.messages = [];
     this.notify();
