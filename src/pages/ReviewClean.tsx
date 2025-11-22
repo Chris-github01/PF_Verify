@@ -5,7 +5,7 @@ import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/
 import { extractAttributes } from '../lib/normaliser/attributeExtractor';
 import { calculateConfidence, getConfidenceColor, getConfidenceLabel } from '../lib/normaliser/confidenceScorer';
 import { matchLineToSystem } from '../lib/mapping/systemMatcher';
-import { getAllSystemLabels } from '../lib/mapping/systemTemplates';
+import { SYSTEM_TEMPLATES } from '../lib/mapping/systemTemplates';
 import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
 import { getStatusColor, getStatusLabel, type QuoteStatus } from '../lib/quoteProcessing/quotePipeline';
@@ -186,7 +186,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [showIssues, setShowIssues] = useState<string | null>(null);
   const [showMatchDetails, setShowMatchDetails] = useState<string | null>(null);
-  const availableSystems = getAllSystemLabels();
+  const availableSystems = SYSTEM_TEMPLATES;
 
   const updateProjectTimestamp = async () => {
     await supabase
