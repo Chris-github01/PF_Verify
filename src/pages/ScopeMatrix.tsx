@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp, CheckSquare, Square, ArrowLeft } from 'lucide-react';
+import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp, CheckSquare, Square, ArrowLeft, FileSpreadsheet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getModelRateProvider } from '../lib/modelRate/modelRateProvider';
 import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgainstModel';
@@ -9,6 +9,7 @@ import { needsQuantity } from '../lib/quoteUtils';
 import { useSuggestedSystems } from '../lib/useSuggestedSystems';
 import SuggestedSystemsPanel from '../components/SuggestedSystemsPanel';
 import { useOrganisation } from '../lib/organisationContext';
+import * as XLSX from 'xlsx';
 
 interface ScopeMatrixProps {
   projectId: string;
@@ -625,6 +626,99 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
     }
   };
 
+  const exportItemizedComparisonToExcel = () => {
+    try {
+      console.log('Export Excel clicked', { matrixRowsCount: matrixRows.length, suppliersCount: suppliers.length });
+
+      if (matrixRows.length === 0) {
+        alert('No data available to export. Please generate a scope matrix first.');
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+
+      const titleRow = ['Itemized Comparison'];
+      const contextRow = ['Project ID:', projectId];
+      const dateRow = ['Generated:', new Date().toLocaleString()];
+      const emptyRow = [];
+
+      const headerRow = ['Item Description', 'Qty', 'Unit'];
+      suppliers.forEach(supplier => {
+        headerRow.push(`${supplier} Unit Rate`);
+        headerRow.push(`${supplier} Total`);
+      });
+
+      const dataRows = matrixRows.map(row => {
+        const excelRow: (string | number)[] = [
+          row.systemLabel || row.systemId,
+          '',
+          ''
+        ];
+
+        suppliers.forEach(supplier => {
+          const cell = row.cells[supplier];
+          if (cell && cell.unitRate !== null) {
+            excelRow.push(cell.unitRate);
+            const total = cell.totalValue !== undefined ? cell.totalValue :
+                         (cell.totalQuantity && cell.unitRate ? cell.totalQuantity * cell.unitRate : 0);
+            excelRow.push(total);
+          } else {
+            excelRow.push('N/A');
+            excelRow.push('N/A');
+          }
+        });
+
+        return excelRow;
+      });
+
+      const sheetData = [
+        titleRow,
+        contextRow,
+        dateRow,
+        emptyRow,
+        headerRow,
+        ...dataRows
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+      ws['!cols'] = [
+        { wch: 40 },
+        { wch: 8 },
+        { wch: 8 },
+        ...suppliers.flatMap(() => [{ wch: 15 }, { wch: 15 }])
+      ];
+
+      if (ws['A1']) {
+        ws['A1'].s = {
+          font: { bold: true, sz: 14 },
+          alignment: { horizontal: 'left' }
+        };
+      }
+
+      for (let col = 0; col < headerRow.length; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 4, c: col });
+        if (ws[cellRef]) {
+          ws[cellRef].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E5E7EB' } },
+            alignment: { horizontal: 'center' }
+          };
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
+
+      const filename = `Itemized_Comparison_${projectId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      console.log('Excel export completed successfully');
+    } catch (error) {
+      console.error('Error exporting Excel:', error);
+      alert('Failed to export Excel. Check console for details.');
+    }
+  };
+
   const clearFilters = () => {
     setFilters({});
   };
@@ -975,6 +1069,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           >
             <Download size={18} />
             Export CSV
+          </button>
+          <button
+            onClick={exportItemizedComparisonToExcel}
+            disabled={matrixRows.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            title={matrixRows.length === 0 ? 'Generate a scope matrix first to export itemized comparison' : 'Export Itemized Comparison to Excel'}
+          >
+            <FileSpreadsheet size={18} />
+            Export Items (Excel)
           </button>
         </div>
       </div>
