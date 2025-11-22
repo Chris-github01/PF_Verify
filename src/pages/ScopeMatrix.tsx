@@ -288,8 +288,32 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       const itemsWithSystemId = itemsData.filter(item => item.system_id);
       console.log('ScopeMatrix: Items with system_id:', itemsWithSystemId.length);
 
+      if (itemsData.length > 0) {
+        const sampleItem = itemsData[0];
+        console.log('ScopeMatrix: Sample item data:', {
+          id: sampleItem.id,
+          description: sampleItem.description?.substring(0, 50),
+          system_id: sampleItem.system_id,
+          system_label: sampleItem.system_label,
+          service: (sampleItem as any).service,
+          subclass: (sampleItem as any).subclass,
+          frr: (sampleItem as any).frr,
+          size: (sampleItem as any).size,
+          quantity: sampleItem.quantity,
+          unit_price: sampleItem.unit_price,
+          canonical_unit: (sampleItem as any).canonical_unit,
+        });
+      }
+
       if (itemsWithSystemId.length === 0) {
         console.warn('ScopeMatrix: WARNING - No items have system_id mapped! Matrix will be empty.');
+        console.warn('ScopeMatrix: Make sure you have completed Review & Clean > Smart Clean or mapping step.');
+      } else {
+        console.log('ScopeMatrix: Sample mapped item:', {
+          system_id: itemsWithSystemId[0].system_id,
+          system_label: itemsWithSystemId[0].system_label,
+          description: itemsWithSystemId[0].description?.substring(0, 50),
+        });
       }
 
       const missingQtySet = new Set(
@@ -677,7 +701,18 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-gray-900 text-sm">{quote.supplier_name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {quote.items_count} items • {quote.mapped_items_count} mapped • ${quote.total_amount?.toLocaleString() || '0'} • <span className="text-green-600 font-medium">Ready</span>
+                        {quote.items_count} items •
+                        {quote.mapped_items_count > 0 ? (
+                          <span className="text-green-600 font-medium"> {quote.mapped_items_count} mapped</span>
+                        ) : (
+                          <span className="text-amber-600 font-medium"> 0 mapped (needs Review & Clean)</span>
+                        )}
+                         • ${quote.total_amount?.toLocaleString() || '0'}
+                        {quote.mapped_items_count > 0 ? (
+                          <span className="text-green-600 font-medium ml-2">✓ Ready</span>
+                        ) : (
+                          <span className="text-amber-600 font-medium ml-2">⚠ Needs mapping</span>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -697,11 +732,22 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
                   </>
                 )}
               </div>
-              {selectedQuoteIds.length >= 2 && (
-                <div className="text-xs text-gray-500">
-                  All selected quotes are normalised and mapped.
-                </div>
-              )}
+              {selectedQuoteIds.length >= 2 && (() => {
+                const selectedQuotes = readyQuotes.filter(q => selectedQuoteIds.includes(q.id));
+                const allMapped = selectedQuotes.every(q => q.mapped_items_count > 0);
+                const totalMapped = selectedQuotes.reduce((sum, q) => sum + q.mapped_items_count, 0);
+                const totalItems = selectedQuotes.reduce((sum, q) => sum + q.items_count, 0);
+
+                return (
+                  <div className={`text-xs ${allMapped ? 'text-green-600' : 'text-amber-600'}`}>
+                    {allMapped ? (
+                      `✓ All selected quotes are normalised and mapped (${totalMapped}/${totalItems} items)`
+                    ) : (
+                      `⚠ Some quotes need mapping - Go to Review & Clean and run Smart Clean`
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
