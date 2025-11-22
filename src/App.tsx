@@ -13,6 +13,7 @@ import ScopeMatrix from './pages/ScopeMatrix';
 import Equalisation from './pages/Equalisation';
 import ContractManager from './pages/ContractManager';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
+import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
 import SystemCheck from './pages/SystemCheck';
 import CopilotAudit from './pages/CopilotAudit';
@@ -48,6 +49,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [showReportsHub, setShowReportsHub] = useState(false);
   const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
   const { currentOrganisation, organisations, loading: orgLoading, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
@@ -164,6 +166,7 @@ function AppContent() {
 
   const handleProjectSelect = async (id: string) => {
     setProjectId(id);
+    setShowReportsHub(false);
     localStorage.setItem('passivefire_current_project_id', id);
 
     await supabase
@@ -526,11 +529,19 @@ function AppContent() {
             }}
           />;
         }
-        return <EnhancedReportsHub
+        if (showReportsHub) {
+          return <EnhancedReportsHub
+            projectId={projectId}
+            projects={allProjects}
+            onNavigateBackToScope={() => setActiveTab('scope')}
+            onNavigateBackToDashboard={() => setActiveTab('dashboard')}
+          />;
+        }
+        return <ProjectReportPage
           projectId={projectId}
-          projects={allProjects}
-          onNavigateBackToScope={() => setActiveTab('scope')}
-          onNavigateBackToDashboard={() => setActiveTab('dashboard')}
+          projectName={projectInfo?.name || 'Project'}
+          onNavigateToHub={() => setShowReportsHub(true)}
+          onToast={(message, type) => setToast({ message, type })}
         />;
 
       case 'insights':
@@ -651,7 +662,14 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex overflow-x-hidden">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setShowReportsHub(false);
+          setActiveTab(tab);
+        }}
+        projectId={projectId}
+      />
 
       <div className="flex-1 flex flex-col max-w-full overflow-x-hidden">
         {isInAdminMode && impersonatedOrg && (

@@ -33,6 +33,7 @@ export type SidebarTab =
 interface SidebarProps {
   activeTab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
+  projectId?: string | null;
 }
 
 const menuItems = [
@@ -46,7 +47,7 @@ const menuItems = [
   { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresManagePermission: true },
 ];
 
-export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, projectId }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { hasPermission } = useOrganisation();
 

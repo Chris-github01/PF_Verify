@@ -17,14 +17,24 @@ interface Project {
 
 interface ReportsHubProps {
   projects: Project[];
+  projectId?: string;
   onNavigate?: (path: 'award-report' | 'equalisation' | 'trade-analysis', reportId?: string) => void;
 }
 
-export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
+export default function ReportsHub({ projects, projectId, onNavigate }: ReportsHubProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (projectId && projects.length > 0 && !selectedProject) {
+      const currentProject = projects.find(p => p.id === projectId && p.has_report);
+      if (currentProject) {
+        setSelectedProject(currentProject);
+      }
+    }
+  }, [projectId, projects]);
 
   const reportReadyProjects = projects.filter(p => p.workflow_complete);
 
