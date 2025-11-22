@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Award, TrendingUp, Shield, Download, FileText, Table as TableIcon, Printer, FolderOpen, ChevronDown, CheckCircle, Clipboard, AlertCircle } from 'lucide-react';
+import { Award, TrendingUp, Shield, Download, FileText, Table as TableIcon, Printer, FolderOpen, ChevronDown, CheckCircle, Clipboard, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { EqualisationMode } from '../types/equalisation.types';
@@ -338,6 +338,104 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
     handlePrint();
   };
 
+  const exportItemizedComparisonToExcel = () => {
+    if (!awardSummary || comparisonData.length === 0) {
+      onToast?.('No itemized comparison data available to export.', 'error');
+      return;
+    }
+
+    try {
+      const wb = XLSX.utils.book_new();
+
+      const titleRow = ['Itemized Comparison'];
+      const contextRow = ['Project:', currentProject?.name || projectId];
+      const dateRow = ['Generated:', new Date().toLocaleString()];
+      const emptyRow = [];
+
+      const headerRow = ['Item Description', 'Qty', 'Unit'];
+      awardSummary.suppliers.forEach(supplier => {
+        headerRow.push(`${supplier.supplierName} Unit Rate`);
+        headerRow.push(`${supplier.supplierName} Total`);
+      });
+
+      const dataRows = comparisonData.map(row => {
+        const excelRow: (string | number)[] = [
+          row.description || '',
+          row.quantity || '',
+          row.unit || ''
+        ];
+
+        awardSummary.suppliers.forEach(supplier => {
+          const supplierData = row.suppliers?.[supplier.supplierName];
+          if (supplierData && supplierData.unitPrice !== null) {
+            excelRow.push(supplierData.unitPrice);
+            excelRow.push(supplierData.total);
+          } else {
+            excelRow.push('N/A');
+            excelRow.push('N/A');
+          }
+        });
+
+        return excelRow;
+      });
+
+      const subtotalRow = ['', '', 'Subtotals:'];
+      awardSummary.suppliers.forEach(supplier => {
+        subtotalRow.push('');
+        subtotalRow.push(supplier.adjustedTotal);
+      });
+
+      const sheetData = [
+        titleRow,
+        contextRow,
+        dateRow,
+        emptyRow,
+        headerRow,
+        ...dataRows,
+        emptyRow,
+        subtotalRow
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+      ws['!cols'] = [
+        { wch: 50 },
+        { wch: 8 },
+        { wch: 8 },
+        ...awardSummary.suppliers.flatMap(() => [{ wch: 15 }, { wch: 15 }])
+      ];
+
+      if (ws['A1']) {
+        ws['A1'].s = {
+          font: { bold: true, sz: 14 },
+          alignment: { horizontal: 'left' }
+        };
+      }
+
+      for (let col = 0; col < headerRow.length; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 4, c: col });
+        if (ws[cellRef]) {
+          ws[cellRef].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E5E7EB' } },
+            alignment: { horizontal: 'center' }
+          };
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
+
+      const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `Itemized_Comparison_${sanitizedProjectName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      onToast?.('Itemized comparison exported successfully', 'success');
+    } catch (error) {
+      console.error('Error exporting itemized comparison:', error);
+      onToast?.('Failed to export itemized comparison', 'error');
+    }
+  };
+
   const handleApproveQuote = async (supplierName: string) => {
     const quoteId = quotesMap.get(supplierName);
     if (!quoteId) {
@@ -581,6 +679,17 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
               <TableIcon size={18} />
               Export Excel
             </button>
+
+            {comparisonData.length > 0 && (
+              <button
+                onClick={exportItemizedComparisonToExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
+                title="Export Itemized Comparison to Excel"
+              >
+                <FileSpreadsheet size={18} />
+                Export Items
+              </button>
+            )}
 
             <button
               onClick={handleCreateBaseTracker}
