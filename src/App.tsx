@@ -227,7 +227,7 @@ function AppContent() {
 
     const { data: projects, error } = await supabase
       .from('projects')
-      .select('id, name, client, reference, updated_at, approved_quote_id')
+      .select('id, name, client, reference, updated_at, approved_quote_id, review_clean_done')
       .eq('organisation_id', currentOrganisation.id)
       .order('updated_at', { ascending: false });
 
@@ -239,6 +239,23 @@ function AppContent() {
     if (projects) {
       const projectsWithReportStatus = await Promise.all(
         projects.map(async (p) => {
+          const { data: quotes } = await supabase
+            .from('quotes')
+            .select('id, status')
+            .eq('project_id', p.id);
+
+          const hasQuotes = quotes && quotes.length > 0;
+          const allQuotesProcessed = quotes && quotes.every(q => q.status === 'processed' || q.status === 'ready');
+
+          const { data: quoteItems } = await supabase
+            .from('quote_items')
+            .select('id, system_id, quote_id')
+            .in('quote_id', quotes?.map(q => q.id) || []);
+
+          const hasMappedItems = quoteItems && quoteItems.some(item => item.system_id);
+
+          const workflowComplete = hasQuotes && allQuotesProcessed && p.review_clean_done && hasMappedItems;
+
           const { data: latestReport } = await supabase
             .from('award_reports')
             .select('id, generated_at, status, result_json')
@@ -261,6 +278,7 @@ function AppContent() {
             report_generated_at: latestReport?.generated_at,
             report_quotes_count: quotesCount,
             report_coverage_percent: Math.round(coveragePercent),
+            workflow_complete: workflowComplete,
           };
         })
       );

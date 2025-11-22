@@ -12,6 +12,7 @@ interface Project {
   report_generated_at?: string;
   report_quotes_count?: number;
   report_coverage_percent?: number;
+  workflow_complete?: boolean;
 }
 
 interface ReportsHubProps {
@@ -25,7 +26,9 @@ export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const filteredProjects = projects.filter(p =>
+  const reportReadyProjects = projects.filter(p => p.workflow_complete);
+
+  const filteredProjects = reportReadyProjects.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.client_reference.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -364,10 +367,20 @@ export default function ReportsHub({ projects, onNavigate }: ReportsHubProps) {
               </div>
             )}
 
-            {filteredProjects.length === 0 && (
+            {reportReadyProjects.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-64 px-6 text-center">
+                <AlertCircle className="w-12 h-12 mb-3 text-amber-400" />
+                <p className="text-sm font-medium text-gray-900 mb-2">No Report-Ready Projects</p>
+                <p className="text-xs text-gray-500 max-w-xs">
+                  Projects must complete all workflow steps (Import Quotes → Review & Clean → Scope Matrix) before they appear here.
+                </p>
+              </div>
+            )}
+
+            {reportReadyProjects.length > 0 && filteredProjects.length === 0 && (
               <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                 <Search className="w-12 h-12 mb-3" />
-                <p className="text-sm">No projects found</p>
+                <p className="text-sm">No projects match your search</p>
               </div>
             )}
           </div>
