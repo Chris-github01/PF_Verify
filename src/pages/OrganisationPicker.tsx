@@ -1,4 +1,4 @@
-import { Building2, Plus, AlertCircle, Loader2 } from 'lucide-react';
+import { Building2, Plus, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
 import { useOrganisation } from '../lib/organisationContext';
 import { supabase } from '../lib/supabase';
 import { useState } from 'react';
@@ -9,13 +9,22 @@ interface OrganisationPickerProps {
 
 export default function OrganisationPicker({ onOrganisationSelected }: OrganisationPickerProps) {
   const { organisations, setCurrentOrganisation, loading, refreshOrganisations } = useOrganisation();
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [error, setError] = useState('');
 
-  const handleSelect = (org: any) => {
-    setCurrentOrganisation(org);
-    onOrganisationSelected();
+  const handleSelect = () => {
+    if (!selectedOrgId) {
+      setError('Please select an organisation');
+      return;
+    }
+    const org = organisations.find(o => o.id === selectedOrgId);
+    if (org) {
+      setCurrentOrganisation(org);
+      onOrganisationSelected();
+    }
   };
 
   const handleCreateOrganisation = async () => {
@@ -59,6 +68,7 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
       await refreshOrganisations();
       setNewOrgName('');
       setError('');
+      setShowCreateForm(false);
 
       setCurrentOrganisation(newOrg);
       onOrganisationSelected();
@@ -90,16 +100,102 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
         </div>
 
         {organisations.length > 0 ? (
-          <div className="space-y-3">
-            {organisations.map((org) => (
-              <button
-                key={org.id}
-                onClick={() => handleSelect(org)}
-                className="w-full p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+          <div className="space-y-4">
+            <div className="relative">
+              <select
+                value={selectedOrgId}
+                onChange={(e) => {
+                  setSelectedOrgId(e.target.value);
+                  setError('');
+                }}
+                className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 appearance-none cursor-pointer"
               >
-                <div className="font-semibold text-gray-900">{org.name}</div>
+                <option value="">Select an organisation...</option>
+                {organisations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+            </div>
+
+            {error && (
+              <div className="text-red-600 text-sm">{error}</div>
+            )}
+
+            <button
+              onClick={handleSelect}
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Continue
+            </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">or</span>
+              </div>
+            </div>
+
+            {showCreateForm ? (
+              <div className="space-y-3 pt-2">
+                <input
+                  type="text"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleCreateOrganisation()}
+                  placeholder="New organisation name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                  disabled={creatingOrg}
+                  autoFocus
+                />
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateOrganisation}
+                    disabled={creatingOrg}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
+                  >
+                    {creatingOrg ? (
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={20} />
+                        Create
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setNewOrgName('');
+                      setError('');
+                    }}
+                    disabled={creatingOrg}
+                    className="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowCreateForm(true);
+                  setError('');
+                }}
+                className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <Plus size={20} />
+                Create New Organisation
               </button>
-            ))}
+            )}
           </div>
         ) : (
           <div className="text-center py-8">
