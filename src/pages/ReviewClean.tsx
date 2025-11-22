@@ -45,12 +45,129 @@ interface QuoteItem {
   system_manual_override?: boolean;
   matched_factors?: any;
   missed_factors?: any;
+  raw_description?: string;
+  raw_unit?: string;
+  normalized_description?: string;
+  normalized_unit?: string;
+  mapped_service_type?: string;
+  mapped_system?: string;
+  mapped_penetration?: string;
+  mapping_confidence?: number;
 }
 
 interface ReviewCleanProps {
   projectId: string;
   onNavigateBack?: () => void;
   onNavigateNext?: () => void;
+}
+
+const UNIT_NORMALISATION: Record<string, string> = {
+  ea: "No",
+  each: "No",
+  nr: "No",
+  no: "No",
+  m: "lm",
+  "linear meter": "lm",
+  "lineal meter": "lm",
+  meter: "lm",
+  metres: "lm",
+  meters: "lm",
+};
+
+function UnitCell({ rawUnit, normalizedUnit, canonicalUnit }: { rawUnit: string; normalizedUnit?: string; canonicalUnit?: string }) {
+  const displayNormalized = normalizedUnit || canonicalUnit;
+  const finalUnit = displayNormalized || UNIT_NORMALISATION[rawUnit.toLowerCase()] || rawUnit;
+  const changed = displayNormalized
+    ? displayNormalized.toLowerCase() !== rawUnit.toLowerCase()
+    : UNIT_NORMALISATION[rawUnit.toLowerCase()] && UNIT_NORMALISATION[rawUnit.toLowerCase()] !== rawUnit;
+
+  return (
+    <div className="flex flex-col text-sm">
+      <span className="font-medium text-gray-900">{finalUnit}</span>
+      {changed && (
+        <span className="text-[10px] text-slate-500">
+          normalised from "{rawUnit}"
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DescriptionCell({ rawDescription, normalizedDescription }: { rawDescription: string; normalizedDescription?: string }) {
+  const finalDesc = normalizedDescription || rawDescription;
+  const changed = normalizedDescription && normalizedDescription.trim() !== rawDescription.trim();
+
+  return (
+    <div className="flex flex-col text-sm max-w-xs">
+      <span className="font-medium text-gray-900 truncate" title={finalDesc}>{finalDesc}</span>
+      {changed && (
+        <span className="text-[11px] text-slate-500 truncate" title={rawDescription}>
+          original: {rawDescription}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function AttributesCell({
+  mappedServiceType,
+  mappedSystem,
+  mappedPenetration,
+  mappingConfidence,
+  size,
+  frr,
+  service,
+  subclass,
+  material,
+}: {
+  mappedServiceType?: string;
+  mappedSystem?: string;
+  mappedPenetration?: string;
+  mappingConfidence?: number;
+  size?: string;
+  frr?: string;
+  service?: string;
+  subclass?: string;
+  material?: string;
+}) {
+  const hasNewMapping = mappedServiceType || mappedSystem || mappedPenetration;
+
+  return (
+    <div className="text-xs space-y-1">
+      {hasNewMapping ? (
+        <div className="flex flex-wrap gap-1">
+          {mappedServiceType && (
+            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+              {mappedServiceType}
+            </span>
+          )}
+          {mappedSystem && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+              {mappedSystem}
+            </span>
+          )}
+          {mappedPenetration && (
+            <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium">
+              {mappedPenetration}
+            </span>
+          )}
+          {typeof mappingConfidence === "number" && (
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+              {(mappingConfidence * 100).toFixed(0)}%
+            </span>
+          )}
+        </div>
+      ) : (
+        <>
+          {size && <div className="text-gray-600">Size: {size}</div>}
+          {frr && <div className="text-gray-600">FRR: {frr}</div>}
+          {service && <div className="text-blue-600">Service: {service}</div>}
+          {subclass && <div className="text-gray-600">Type: {subclass}</div>}
+          {material && <div className="text-gray-600">Material: {material}</div>}
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext }: ReviewCleanProps) {
@@ -383,6 +500,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
       }
 
       console.log('\n========== PROCESS ALL QUOTES COMPLETE ==========');
+
+      if (selectedQuote) {
+        await loadItems(selectedQuote);
+      }
+      await loadQuotes();
+
       setMessage({ type: 'success', text: 'All quotes processed successfully.' });
     } catch (error) {
       console.error('Process All Quotes error:', error);
@@ -796,9 +919,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
                           </>
                         ) : (
                           <>
-                            <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                            <td className="px-4 py-3 max-w-xs">
                               <div className="flex items-center gap-2">
-                                <div className="truncate" title={item.description}>{item.description}</div>
+                                <DescriptionCell
+                                  rawDescription={item.raw_description || item.description}
+                                  normalizedDescription={item.normalized_description}
+                                />
                                 {needsQuantity(item) && (
                                   <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 whitespace-nowrap">
                                     Needs quantity
@@ -807,22 +933,27 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext 
                               </div>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <div>{item.unit}</div>
-                              {item.canonical_unit && (
-                                <div className="text-xs text-blue-600 font-medium">→ {item.canonical_unit}</div>
-                              )}
+                            <td className="px-4 py-3">
+                              <UnitCell
+                                rawUnit={item.raw_unit || item.unit}
+                                normalizedUnit={item.normalized_unit}
+                                canonicalUnit={item.canonical_unit}
+                              />
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">${item.unit_price.toFixed(2)}</td>
                             <td className="px-4 py-3 text-sm text-gray-900">${item.total_price.toFixed(2)}</td>
                             <td className="px-4 py-3">
-                              <div className="text-xs space-y-1">
-                                {item.size && <div className="text-gray-600">Size: {item.size}</div>}
-                                {item.frr && <div className="text-gray-600">FRR: {item.frr}</div>}
-                                {item.service && <div className="text-blue-600">Service: {item.service}</div>}
-                                {item.subclass && <div className="text-gray-600">Type: {item.subclass}</div>}
-                                {item.material && <div className="text-gray-600">Material: {item.material}</div>}
-                              </div>
+                              <AttributesCell
+                                mappedServiceType={item.mapped_service_type}
+                                mappedSystem={item.mapped_system}
+                                mappedPenetration={item.mapped_penetration}
+                                mappingConfidence={item.mapping_confidence}
+                                size={item.size}
+                                frr={item.frr}
+                                service={item.service}
+                                subclass={item.subclass}
+                                material={item.material}
+                              />
                             </td>
                             <td className="px-4 py-3">
                               {item.system_label ? (
