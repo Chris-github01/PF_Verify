@@ -594,7 +594,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             value={supplierName}
             onChange={(e) => setSupplierName(e.target.value)}
             placeholder="Enter supplier name..."
-            className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] transition"
+            className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] transition bg-white text-gray-900"
           />
           <p className="mt-1 text-xs text-gray-500">
             This name will be displayed throughout the analysis instead of the file name

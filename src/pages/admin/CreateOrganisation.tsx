@@ -134,7 +134,7 @@ export default function CreateOrganisation() {
               placeholder="Optimal Fire"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
             />
           </div>
 
@@ -164,7 +164,7 @@ export default function CreateOrganisation() {
                 value={seatLimit}
                 onChange={(e) => setSeatLimit(parseInt(e.target.value) || 0)}
                 min="1"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
               />
               <p className="mt-1 text-xs text-slate-500">Owners, admins, and members use a seat. Viewers are free.</p>
             </div>
@@ -179,7 +179,7 @@ export default function CreateOrganisation() {
               placeholder="owner@company.com"
               value={ownerEmail}
               onChange={(e) => setOwnerEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
             />
             <p className="mt-1 text-xs text-slate-500">
               We'll send an invite to this email. They'll become the Organisation Owner.
