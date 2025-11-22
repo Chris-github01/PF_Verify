@@ -93,8 +93,16 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
       );
       setItemsWithMissingQty(missingQtySet);
 
+      console.log('ScopeMatrix: Loading data for project', projectId);
+      console.log('ScopeMatrix: Found', quotesData.length, 'quotes and', itemsData.length, 'items');
+
       const normalisedLines = itemsData.map(item => {
         const quote = quotesData.find(q => q.id === item.quote_id);
+
+        const serviceType = (item as any).service || (item as any).mapped_service_type || (item as any).serviceType;
+        const systemType = (item as any).mapped_system || (item as any).systemType;
+        const penetrationType = (item as any).mapped_penetration || (item as any).penetrationType;
+
         return {
           quoteId: item.quote_id,
           quoteItemId: item.id,
@@ -103,13 +111,19 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
           quantity: item.quantity || 1,
           rate: item.unit_price,
           total: item.total_price,
-          section: item.section,
-          service: item.service,
-          subclass: item.subclass,
-          frr: item.frr,
-          size: item.size,
+          section: (item as any).section,
+          service: serviceType,
+          serviceType: serviceType,
+          subclass: (item as any).subclass,
+          frr: (item as any).frr,
+          size: (item as any).size,
+          systemType: systemType,
+          penetrationType: penetrationType,
         };
       });
+
+      console.log('ScopeMatrix: Normalised', normalisedLines.length, 'lines');
+      console.log('ScopeMatrix: Sample item:', normalisedLines[0]);
 
       const mappings = itemsData.map(item => ({
         quoteItemId: item.id,
@@ -117,14 +131,24 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
         systemLabel: item.system_label,
       }));
 
+      console.log('ScopeMatrix: Created', mappings.length, 'mappings');
+      console.log('ScopeMatrix: Mappings with system_id:', mappings.filter(m => m.systemId).length);
+
       const provider = getModelRateProvider(projectId);
       await provider.loadSettings();
+
+      console.log('ScopeMatrix: Model rate provider loaded');
 
       const comparisons = await compareAgainstModelHybrid(
         normalisedLines,
         mappings,
         (criteria) => provider.getModelRate(criteria)
       );
+
+      console.log('ScopeMatrix: Generated', comparisons.length, 'comparison rows');
+      if (comparisons.length > 0) {
+        console.log('ScopeMatrix: Sample comparison:', comparisons[0]);
+      }
 
       setComparisonData(comparisons);
       extractAvailableFilters(comparisons);
@@ -313,10 +337,17 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext 
   }
 
   if (comparisonData.length === 0) {
+    console.log('ScopeMatrix: No comparison data available');
+    console.log('ScopeMatrix: Check console for data loading logs above');
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-        <p className="text-gray-500 text-lg">No data available.</p>
-        <p className="text-gray-400 mt-2">Import quotes and configure model rate settings to view the scope matrix.</p>
+        <p className="text-gray-500 text-lg">No comparison data available.</p>
+        <p className="text-gray-400 mt-2">
+          Please ensure quotes have been imported, normalized, and mapped to systems.
+        </p>
+        <p className="text-gray-400 mt-2 text-sm">
+          Go to Review & Clean and click "Process All Quotes" to prepare data for the scope matrix.
+        </p>
       </div>
     );
   }
