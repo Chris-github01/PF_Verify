@@ -347,25 +347,28 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
 
     setProcessingAction(quoteId);
     try {
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve_quote`;
-      const headers = {
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      };
+      const { error: projectError } = await supabase
+        .from('projects')
+        .update({
+          approved_quote_id: quoteId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          projectId,
-          quoteId,
-        }),
-      });
+      if (projectError) {
+        throw new Error(projectError.message);
+      }
 
-      const result = await response.json();
+      const { error: quoteError } = await supabase
+        .from('quotes')
+        .update({
+          status: 'approved',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', quoteId);
 
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to approve quote');
+      if (quoteError) {
+        throw new Error(quoteError.message);
       }
 
       onToast?.(`Approved ${supplierName}`, 'success');
@@ -872,7 +875,12 @@ export default function AwardReport({ projectId, reportId, onToast, onNavigate }
                         </td>
                         <td className="px-4 py-3 border border-gray-300 no-print">
                           <div className="flex items-center justify-center gap-2">
-                            {!isApproved && (
+                            {isApproved ? (
+                              <div className="flex items-center gap-1.5 text-green-600">
+                                <CheckCircle size={20} className="fill-green-600" />
+                                <span className="text-sm font-medium">Approved</span>
+                              </div>
+                            ) : (
                               <button
                                 onClick={() => handleApproveQuote(supplier.supplierName)}
                                 disabled={isProcessing}
