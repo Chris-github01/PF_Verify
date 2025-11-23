@@ -54,16 +54,16 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     });
 
     if (!session || !session.user) {
-      if (retryCount < 5) {
-        console.log('⏳ [OrganisationContext] Session not ready, retrying in 800ms... (attempt', retryCount + 1, 'of 5)');
-        await new Promise(resolve => setTimeout(resolve, 800));
+      if (retryCount < 3) {
+        console.log('⏳ [OrganisationContext] Session not ready, retrying in 600ms... (attempt', retryCount + 1, 'of 3)');
+        await new Promise(resolve => setTimeout(resolve, 600));
         return loadOrganisations(retryCount + 1);
       }
 
-      console.error('❌ [OrganisationContext] No session after 5 retries - redirecting to login');
-      setDebugInfo({ ...debug, error: 'No session after retries' });
+      console.log('ℹ️ [OrganisationContext] No session found - user not logged in');
+      setDebugInfo({ ...debug, info: 'No session - user not logged in' });
+      setOrganisations([]);
       setLoading(false);
-      window.location.href = '/';
       return;
     }
 
