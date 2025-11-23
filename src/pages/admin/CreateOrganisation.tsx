@@ -24,9 +24,6 @@ export default function CreateOrganisation() {
 
     setCreating(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      console.log('Current user:', currentUser?.email, currentUser?.id);
-
       const planTierMap: Record<string, string> = {
         'Trial': 'trial',
         'Starter': 'standard',
@@ -37,43 +34,22 @@ export default function CreateOrganisation() {
       const pricingTier = planTierMap[plan] || 'standard';
       const status = plan === 'Trial' ? 'trial' : 'active';
 
-      let ownerId = '';
-
-      const { data: { users: existingUsers }, error: userLookupError } = await supabase.auth.admin.listUsers();
-
-      if (userLookupError) {
-        console.error('Error looking up users:', userLookupError);
-      }
-
-      const existingUser = existingUsers?.find(u => u.email === ownerEmail);
-
-      if (existingUser) {
-        ownerId = existingUser.id;
-      } else {
-        const tempPassword = Math.random().toString(36).slice(-12);
-        const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
-          email: ownerEmail,
-          password: tempPassword,
-          email_confirm: false,
-        });
-
-        if (authError) throw authError;
-        ownerId = newUser.user.id;
-      }
-
       const { data: result, error: createError } = await supabase
-        .rpc('create_organisation_with_owner', {
+        .rpc('create_organisation_with_owner_by_email', {
           p_name: name,
           p_status: status,
           p_seat_limit: seatLimit,
           p_pricing_tier: pricingTier,
-          p_owner_user_id: ownerId
+          p_owner_email: ownerEmail.toLowerCase().trim()
         });
 
       if (createError) throw createError;
 
       const orgId = result.id;
-      window.location.href = `/admin/organisations/${orgId}`;
+      setToast({ type: 'success', message: 'Organisation created successfully!' });
+      setTimeout(() => {
+        window.location.href = `/admin/organisations/${orgId}`;
+      }, 1000);
     } catch (error: any) {
       console.error('Error creating organisation:', error);
       setToast({ type: 'error', message: error.message || 'Failed to create organisation' });
