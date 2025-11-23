@@ -98,14 +98,21 @@ CRITICAL INSTRUCTIONS FOR MULTI-PAGE QUOTES:
 - Look for "QUOTE BREAKDOWN" section (typically pages 8-15) - THIS is where ALL line items are listed
 - The first page summary shows categories (e.g., "COLLAR $540,242", "CAVITY BARRIER $309,869") but NOT individual items
 - Extract EVERY individual row from the detailed breakdown tables
-- Each row should have: Service/Description, Size, Substrate, Quantity, Base Rate, and calculated Total
-- Fire protection systems: SC902, Nullifire, Tenmat FF102, Ryanspan (with/without brackets), PVC Pipe, Steel Pipe, Cable Bundle
-- Linear works: Cavity Barrier (Tenmat), Compressive Seal (Ryanspan), Door Perimeter Seals
-- Units: m² (sqm), lm (linear meters), m (meters), ea., Nr, EA
 - Parse building sections separately: Building A, Block B, Block C, Undercroft
 - DO NOT skip any pages with "Page X of 15" headers
-- Verify: Sum of ALL detailed line items = subtotal from page 1
-- Include markup/contingency as separate line item if present
+
+CRITICAL: MULTI-COLUMN PRICING TABLES
+- These tables have MULTIPLE cost columns that ADD UP to the final Total
+- Columns: Service, Size, Substrate, Quantity, Base Rate, GIB Patch, Batt Patch, Insulation, Timber Top Plate, Baffle, Total
+- YOU MUST extract the TOTAL column value (rightmost column) as the line_total
+- DO NOT just use Base Rate - that's only ONE component of the price
+- Example row: "Cable Bundle, Up to 40mm, Korok Panel 51mm, 48, Base Rate $39.15, Total $1,879.20"
+  - Correct line_total = $1,879.20 (from Total column)
+  - WRONG = $39.15 (that's just the base rate per unit)
+- The Total column already includes: base + patches + insulation + all add-ons
+- Look for sub-section totals like "Electrical - Sub Total $103,444.65", "Hydraulic - Sub Total $248,704.68"
+- Linear works sections show: Description, Depth/Width, Length (in meters), Rate per meter, Total
+- Verify: Sum of ALL line item Totals = subtotal from page 1 ($2,227,124.09 for this quote)
 
 FINANCIAL VALIDATION:
 - Extract the GRAND TOTAL from the summary page (page 1)
