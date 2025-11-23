@@ -36,18 +36,24 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     loadOrganisations();
   }, []);
 
-  const loadOrganisations = async () => {
+  const loadOrganisations = async (retryCount = 0) => {
     setLoading(true);
-    const debug: any = { timestamp: new Date().toISOString() };
+    const debug: any = { timestamp: new Date().toISOString(), retryCount };
 
     const { data: { user } } = await supabase.auth.getUser();
     debug.user = user ? { id: user.id, email: user.email } : null;
 
-    console.log('🔍 [OrganisationContext] Fetching orgs for user ID:', user?.id, 'email:', user?.email);
+    console.log('🔍 [OrganisationContext] Fetching orgs for user ID:', user?.id, 'email:', user?.email, 'retry:', retryCount);
 
     if (!user) {
-      console.warn('⚠️ [OrganisationContext] No authenticated user found');
-      setDebugInfo({ ...debug, error: 'No authenticated user' });
+      if (retryCount < 3) {
+        console.log('⏳ [OrganisationContext] User not loaded yet, retrying in 500ms... (attempt', retryCount + 1, 'of 3)');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return loadOrganisations(retryCount + 1);
+      }
+
+      console.warn('⚠️ [OrganisationContext] No authenticated user found after 3 retries');
+      setDebugInfo({ ...debug, error: 'No authenticated user after retries' });
       setLoading(false);
       return;
     }
