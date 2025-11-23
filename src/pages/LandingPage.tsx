@@ -1,4 +1,4 @@
-import { Building2, Zap, Shield, CheckCircle, ArrowRight } from 'lucide-react';
+import { Target, Zap, Shield, CheckCircle, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 
 interface LandingPageProps {
@@ -7,6 +7,16 @@ interface LandingPageProps {
 
 export default function LandingPage({ onSignIn }: LandingPageProps) {
   const [showDemoModal, setShowDemoModal] = useState(false);
+
+  const trustedCompanies = [
+    'Optimal Fire',
+    'FR Coatings',
+    'PyroTech',
+    'FireSafe Solutions',
+    'Passive Protection Ltd',
+    'Elite Firestopping',
+    '127+ others'
+  ];
 
   return (
     <div className="min-h-screen bg-white">
@@ -19,10 +29,10 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
             </div>
 
             <div className="hidden md:flex items-center gap-8">
-              <a href="#use-cases" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Use Cases</a>
+              <a href="#how-it-works" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
               <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Pricing</a>
               <a href="#customers" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Customers</a>
-              <a href="#company" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Company</a>
+              <a href="#resources" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Resources</a>
               <a href="#support" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Support</a>
             </div>
 
@@ -35,9 +45,9 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
               </button>
               <button
                 onClick={() => setShowDemoModal(true)}
-                className="hidden sm:block px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+                className="hidden sm:block px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all shadow-sm"
               >
-                Book Demo
+                See a Live Demo
               </button>
             </div>
           </div>
@@ -45,50 +55,64 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
       </nav>
 
       <main className="pt-16">
-        <section className="relative overflow-hidden bg-gradient-to-b from-blue-50 via-white to-white py-20 sm:py-32">
+        <section className="relative overflow-hidden bg-gradient-to-b from-gray-50 via-white to-white py-20 sm:py-32">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-4xl mx-auto">
+            <div className="text-center max-w-5xl mx-auto">
               <div className="flex flex-wrap justify-center gap-3 mb-8">
-                <span className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-full border border-blue-200">
-                  Site Operative
-                </span>
-                <span className="px-4 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-full border border-green-200">
-                  Compliance Supervisor
+                <span className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 rounded-full border border-orange-200">
+                  Estimators
                 </span>
                 <span className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-full border border-purple-200">
-                  Contracts Manager
+                  Technical Managers
+                </span>
+                <span className="px-4 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-full border border-green-200">
+                  Directors
                 </span>
               </div>
 
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 tracking-tight">
-                The Next Chapter in<br />
-                <span className="bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
-                  Passive Fire Verification
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 tracking-tight leading-tight">
+                Never Get Screwed on<br />
+                <span className="bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
+                  Passive Fire Scope Again
                 </span>
               </h1>
 
-              <p className="text-xl sm:text-2xl text-gray-600 mb-4 font-medium">
-                Software for Firestopping Subcontractors
+              <p className="text-2xl sm:text-3xl font-semibold text-blue-600 mb-4">
+                AI Trade Intelligence for Specialist Subcontractors
               </p>
 
-              <p className="text-base sm:text-lg text-gray-500 mb-12 max-w-2xl mx-auto">
-                Trusted by 500+ fire safety teams – Streamline verifications, prove compliance instantly, win more work
+              <p className="text-base sm:text-lg text-gray-600 mb-6 max-w-3xl mx-auto">
+                Used on 500+ projects to protect margins and win fair pricing
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <p className="text-lg sm:text-xl text-gray-700 mb-12 max-w-3xl mx-auto leading-relaxed">
+                We read every quote like a 30-year passive fire expert — then show you exactly where they're trying to underpay or over-risk you.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
                 <button
                   onClick={onSignIn}
-                  className="group px-8 py-4 text-lg font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  className="group px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                 >
-                  Start Free Trial
+                  Analyse Your First Quote Free
                   <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
                 </button>
                 <button
                   onClick={() => setShowDemoModal(true)}
                   className="px-8 py-4 text-lg font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:border-gray-400 transition-all shadow-sm hover:shadow-md"
                 >
-                  Book Demo
+                  See a Live Demo
                 </button>
+              </div>
+
+              <div className="relative overflow-hidden py-4 bg-gradient-to-r from-transparent via-blue-50 to-transparent rounded-lg">
+                <div className="flex animate-scroll whitespace-nowrap">
+                  {[...trustedCompanies, ...trustedCompanies].map((company, idx) => (
+                    <span key={idx} className="inline-block px-8 text-sm font-medium text-gray-600">
+                      Used by {company}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -98,12 +122,22 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid md:grid-cols-3 gap-12">
               <div className="text-center group">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-6 group-hover:bg-blue-200 transition-colors">
-                  <Zap className="text-blue-600" size={32} />
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-2xl mb-6 group-hover:bg-red-200 transition-colors">
+                  <AlertTriangle className="text-red-600" size={32} />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Real-Time Site Capture</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Instant Scope Gap Detection</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Capture fire-stopping installations instantly with mobile-first workflows. No paperwork, no delays, complete visibility.
+                  Highlights missing penetrations, wrong certifications, excluded testing in under 45 seconds. No more hidden exclusions.
+                </p>
+              </div>
+
+              <div className="text-center group">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-6 group-hover:bg-blue-200 transition-colors">
+                  <Target className="text-blue-600" size={32} />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Apples-to-Apples Normalisation</h3>
+                <p className="text-gray-600 leading-relaxed">
+                  Maps every supplier's terminology to your master library — no more "Hilti vs Promat" confusion or unfair comparisons.
                 </p>
               </div>
 
@@ -111,41 +145,33 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-2xl mb-6 group-hover:bg-green-200 transition-colors">
                   <CheckCircle className="text-green-600" size={32} />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Instant Compliance Proof</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Bulletproof Counter-Analysis</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Generate audit-ready reports in seconds. Demonstrate full compliance with building regulations and fire safety standards.
-                </p>
-              </div>
-
-              <div className="text-center group">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-2xl mb-6 group-hover:bg-purple-200 transition-colors">
-                  <Building2 className="text-purple-600" size={32} />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Zero Admin Workflows</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Automate quote analysis, scope verification, and variation tracking. Free your team to focus on delivery, not paperwork.
+                  Generates board-ready reports that force fair pricing and full scope inclusion. Show the QS exactly where they're wrong.
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="py-20 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-4xl font-bold text-gray-900 mb-8">
-              Ready to transform your passive fire workflow?
-            </h2>
-            <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
-              Join hundreds of fire safety teams already using PassiveFire Verify+ to win more work and deliver with confidence.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={onSignIn}
-                className="group px-8 py-4 text-lg font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-              >
-                Start Free Trial
-                <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
-              </button>
+        <section className="py-20 bg-gradient-to-b from-gray-50 to-white">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-12">
+              <h2 className="text-4xl font-bold text-gray-900 mb-6">
+                Stop Losing Money on Scope Confusion
+              </h2>
+              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+                Every quote you receive is a negotiation. Most subcontractors lose because they can't prove what's missing or unfair. We give you the evidence.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button
+                  onClick={onSignIn}
+                  className="group px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                >
+                  Analyse Your First Quote Free
+                  <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -159,14 +185,18 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
                 <Shield className="text-blue-500" size={24} />
                 <span className="text-lg font-bold text-white">PassiveFire Verify+</span>
               </div>
-              <p className="text-sm">
-                The modern platform for passive fire verification and compliance.
+              <p className="text-sm mb-4">
+                AI Trade Intelligence for Specialist Subcontractors
+              </p>
+              <p className="text-xs text-gray-500 italic">
+                Built by people who've priced £500m+ of passive fire work.
               </p>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+                <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
                 <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
                 <li><a href="#security" className="hover:text-white transition-colors">Security</a></li>
               </ul>
@@ -175,15 +205,17 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
               <h4 className="text-white font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="#about" className="hover:text-white transition-colors">About</a></li>
+                <li><a href="#customers" className="hover:text-white transition-colors">Customers</a></li>
                 <li><a href="#contact" className="hover:text-white transition-colors">Contact</a></li>
                 <li><a href="#careers" className="hover:text-white transition-colors">Careers</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-semibold mb-4">Support</h4>
+              <h4 className="text-white font-semibold mb-4">Resources</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="#help" className="hover:text-white transition-colors">Help Center</a></li>
                 <li><a href="#docs" className="hover:text-white transition-colors">Documentation</a></li>
+                <li><a href="#support" className="hover:text-white transition-colors">Support</a></li>
                 <li><a href="#status" className="hover:text-white transition-colors">System Status</a></li>
               </ul>
             </div>
@@ -197,9 +229,9 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
       {showDemoModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Book a Demo</h3>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">Book a Live Demo</h3>
             <p className="text-gray-600 mb-6">
-              Discover how PassiveFire Verify+ can transform your fire safety verification workflow.
+              See exactly how we catch scope gaps, normalize quotes, and protect your margins in a 15-minute walkthrough.
             </p>
             <div className="space-y-4">
               <input
@@ -217,6 +249,11 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
                 placeholder="Phone number"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <input
+                type="text"
+                placeholder="Company name"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
               <button className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">
                 Request Demo
               </button>
@@ -230,6 +267,20 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes scroll {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+        .animate-scroll {
+          animation: scroll 30s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }
