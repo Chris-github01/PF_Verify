@@ -24,6 +24,9 @@ export default function CreateOrganisation() {
 
     setCreating(true);
     try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log('Current user:', currentUser?.email, currentUser?.id);
+
       const planTierMap: Record<string, string> = {
         'Trial': 'trial',
         'Starter': 'standard',
