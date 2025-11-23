@@ -53,7 +53,6 @@ export default function DashboardHeader({
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/';
   };
 
   return (

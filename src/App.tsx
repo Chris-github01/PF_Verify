@@ -96,6 +96,16 @@ function AppContent() {
       });
       (async () => {
         setSession(session);
+        if (_event === 'SIGNED_OUT') {
+          setShowLanding(true);
+          setSelectedMode(null);
+          setProjectId(null);
+          setProjectInfo(null);
+          setAllProjects([]);
+          setActiveTab('dashboard');
+          localStorage.removeItem('passivefire_current_project_id');
+          localStorage.removeItem('passivefire_current_organisation_id');
+        }
       })();
     });
 
