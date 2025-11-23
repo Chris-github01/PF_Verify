@@ -26,6 +26,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const errorMsg = error?.message || '';
+    const errorStack = error?.stack || '';
+
+    if (errorMsg.includes('chmln') || errorMsg.includes('messo') ||
+        errorStack.includes('chmln.js') || errorStack.includes('messo.min.js')) {
+      console.warn('External script error caught and suppressed:', errorMsg);
+      this.setState({ hasError: false, error: null });
+      return;
+    }
+
     console.error('Error caught by boundary:', error, errorInfo);
   }
 

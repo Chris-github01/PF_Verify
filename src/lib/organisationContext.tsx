@@ -36,6 +36,13 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log('🔄 [OrganisationContext] Setting up auth listener...');
 
+    const loadTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ [OrganisationContext] Loading timeout after 5s - forcing completion');
+        setLoading(false);
+      }
+    }, 5000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('🔄 [OrganisationContext] Initial session check:', { hasSession: !!session });
       setSessionReady(true);
@@ -44,6 +51,11 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       } else {
         setLoading(false);
       }
+      clearTimeout(loadTimeout);
+    }).catch((error) => {
+      console.error('❌ [OrganisationContext] Session load error:', error);
+      setLoading(false);
+      clearTimeout(loadTimeout);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -61,6 +73,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
     return () => {
       subscription.unsubscribe();
+      clearTimeout(loadTimeout);
     };
   }, []);
 
@@ -68,15 +81,16 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const debug: any = { timestamp: new Date().toISOString() };
 
-    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
 
-    if (!session || !session.user) {
-      console.warn('⚠️ [OrganisationContext] loadOrganisations called without session');
-      setDebugInfo({ ...debug, error: 'Called without session' });
-      setOrganisations([]);
-      setLoading(false);
-      return;
-    }
+      if (!session || !session.user) {
+        console.warn('⚠️ [OrganisationContext] loadOrganisations called without session');
+        setDebugInfo({ ...debug, error: 'Called without session' });
+        setOrganisations([]);
+        setLoading(false);
+        return;
+      }
 
     const user = session.user;
     debug.user = { id: user.id, email: user.email };
@@ -217,6 +231,10 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     setDebugInfo(debug);
     setLoading(false);
     console.log('✅ [OrganisationContext] Load complete. Final org count:', orgs?.length || 0);
+    } catch (error) {
+      console.error('❌ [OrganisationContext] Critical error in loadOrganisations:', error);
+      setLoading(false);
+    }
   };
 
   const refreshOrganisations = async () => {

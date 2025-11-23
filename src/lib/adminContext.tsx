@@ -13,7 +13,16 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAdminStatus();
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ [AdminContext] Loading timeout - forcing completion');
+        setLoading(false);
+      }
+    }, 3000);
+
+    checkAdminStatus().finally(() => clearTimeout(timeout));
+
+    return () => clearTimeout(timeout);
   }, []);
 
   const checkAdminStatus = async () => {
