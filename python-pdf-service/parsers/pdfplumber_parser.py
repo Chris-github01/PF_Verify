@@ -34,13 +34,6 @@ class PDFPlumberParser:
 
                 # Extract tables and text from each page
                 for page_num, page in enumerate(pdf.pages, 1):
-                    # Extract text first to check if it's a rate schedule page
-                    page_text = page.extract_text()
-
-                    # Skip rate schedule and reference pages
-                    if self._is_rate_schedule_page(page_text):
-                        continue
-
                     # Extract tables
                     page_tables = page.extract_tables()
                     if page_tables:
@@ -53,6 +46,7 @@ class PDFPlumberParser:
                             })
 
                     # Extract text
+                    page_text = page.extract_text()
                     if page_text:
                         text_content.append({
                             'page': page_num,
@@ -178,49 +172,6 @@ class PDFPlumberParser:
             return float(cleaned)
         except ValueError:
             return 0.0
-
-    def _is_rate_schedule_page(self, page_text: str) -> bool:
-        """
-        Detect if a page is a rate schedule/pricing reference page.
-        These pages list pricing tiers but are not actual quoted items.
-        """
-        if not page_text:
-            return False
-
-        text_lower = page_text.lower()
-
-        # Strong indicators this is a rate schedule page
-        rate_schedule_indicators = [
-            'rates\nschedule',
-            'rate schedule',
-            'rates schedule',
-            'pricing schedule',
-            'price schedule',
-            'rate group',
-            'tier 1',
-            'tier 2',
-            'tier 3',
-        ]
-
-        # Count how many indicators are present
-        indicator_count = sum(1 for indicator in rate_schedule_indicators if indicator in text_lower)
-
-        # If we have multiple indicators, likely a rate schedule
-        if indicator_count >= 2:
-            return True
-
-        # Additional check: contains "GROUP" followed by decimal numbers and "ea." units
-        # This is typical of rate schedule pages showing unit pricing
-        group_pattern = r'group\s+\d+\.?\d*\s+.*?\$\s*\d+\.\d{2}\s+ea\.'
-        if re.search(group_pattern, text_lower, re.IGNORECASE):
-            return True
-
-        # Check if page has title "RATES" or "RATES SCHEDULE" prominently at top
-        first_lines = '\n'.join(page_text.split('\n')[:10]).lower()
-        if 'rates\nschedule' in first_lines or 'rate\nschedule' in first_lines:
-            return True
-
-        return False
 
     def _extract_financials(self, text: str) -> Dict:
         """Extract financial totals from text."""

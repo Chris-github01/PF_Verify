@@ -27,13 +27,6 @@ class PyMuPDFParser:
             for page_num in range(num_pages):
                 page = doc[page_num]
 
-                # Get plain text first to check if it's a rate schedule
-                page_text = page.get_text()
-
-                # Skip rate schedule and reference pages
-                if self._is_rate_schedule_page(page_text):
-                    continue
-
                 # Get text blocks with position info
                 page_blocks = page.get_text("blocks")
                 blocks.extend([{
@@ -47,6 +40,8 @@ class PyMuPDFParser:
                     'block_type': block[6],
                 } for block in page_blocks if block[4].strip()])
 
+                # Get plain text
+                page_text = page.get_text()
                 all_text.append(page_text)
 
                 # Try to detect tables by analyzing layout
@@ -217,49 +212,6 @@ class PyMuPDFParser:
             return float(cleaned)
         except ValueError:
             return 0.0
-
-    def _is_rate_schedule_page(self, page_text: str) -> bool:
-        """
-        Detect if a page is a rate schedule/pricing reference page.
-        These pages list pricing tiers but are not actual quoted items.
-        """
-        if not page_text:
-            return False
-
-        text_lower = page_text.lower()
-
-        # Strong indicators this is a rate schedule page
-        rate_schedule_indicators = [
-            'rates\nschedule',
-            'rate schedule',
-            'rates schedule',
-            'pricing schedule',
-            'price schedule',
-            'rate group',
-            'tier 1',
-            'tier 2',
-            'tier 3',
-        ]
-
-        # Count how many indicators are present
-        indicator_count = sum(1 for indicator in rate_schedule_indicators if indicator in text_lower)
-
-        # If we have multiple indicators, likely a rate schedule
-        if indicator_count >= 2:
-            return True
-
-        # Additional check: contains "GROUP" followed by decimal numbers and "ea." units
-        # This is typical of rate schedule pages showing unit pricing
-        group_pattern = r'group\s+\d+\.?\d*\s+.*?\$\s*\d+\.\d{2}\s+ea\.'
-        if re.search(group_pattern, text_lower, re.IGNORECASE):
-            return True
-
-        # Check if page has title "RATES" or "RATES SCHEDULE" prominently at top
-        first_lines = '\n'.join(page_text.split('\n')[:10]).lower()
-        if 'rates\nschedule' in first_lines or 'rate\nschedule' in first_lines:
-            return True
-
-        return False
 
     def _extract_financials(self, text: str) -> Dict:
         """Extract financial totals from text."""
