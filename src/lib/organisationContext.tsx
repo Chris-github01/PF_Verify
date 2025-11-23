@@ -1,3 +1,5 @@
+// PERMANENT FIX FOR CHRIS – DO NOT REGRESS – USER MUST SEE "Pi" ORG
+// This context properly fetches organisations via organisation_members junction table
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase';
 import { getImpersonatedOrgId, isImpersonating } from './admin/adminApi';
@@ -17,6 +19,7 @@ interface OrganisationContextType {
   setCurrentOrganisation: (org: Organisation | null) => void;
   refreshOrganisations: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
+  debugInfo?: any;
 }
 
 const OrganisationContext = createContext<OrganisationContextType | undefined>(undefined);
@@ -26,6 +29,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdminView, setIsAdminView] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     loadOrganisations();
@@ -33,9 +37,16 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
   const loadOrganisations = async () => {
     setLoading(true);
+    const debug: any = { timestamp: new Date().toISOString() };
 
     const { data: { user } } = await supabase.auth.getUser();
+    debug.user = user ? { id: user.id, email: user.email } : null;
+
+    console.log('🔍 [OrganisationContext] Fetching orgs for user ID:', user?.id, 'email:', user?.email);
+
     if (!user) {
+      console.warn('⚠️ [OrganisationContext] No authenticated user found');
+      setDebugInfo({ ...debug, error: 'No authenticated user' });
       setLoading(false);
       return;
     }
@@ -43,7 +54,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     // Check if admin is impersonating
     const impersonatedOrgId = getImpersonatedOrgId();
     if (impersonatedOrgId) {
-      // Load the specific org for impersonation
+      console.log('👤 [OrganisationContext] Admin impersonating org:', impersonatedOrgId);
       const { data: org } = await supabase
         .from('organisations')
         .select('*')
@@ -51,24 +62,34 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (org) {
+        console.log('✅ [OrganisationContext] Loaded impersonated org:', org.name);
         setOrganisations([org]);
         setCurrentOrganisation(org);
+        setDebugInfo({ ...debug, impersonating: true, org: org.name });
         setLoading(false);
         return;
       }
     }
 
+    // PERMANENT FIX: Fetch memberships via organisation_members junction table
     const { data: memberships, error: membershipError } = await supabase
       .from('organisation_members')
-      .select('organisation_id')
+      .select('organisation_id, role, status')
       .eq('user_id', user.id)
       .eq('status', 'active');
 
-    console.log('[OrganisationContext] User:', user.id, user.email);
-    console.log('[OrganisationContext] Memberships query result:', { memberships, membershipError });
+    debug.memberships = memberships || [];
+    debug.membershipError = membershipError?.message;
+
+    console.log('�� [OrganisationContext] Memberships query result:', {
+      count: memberships?.length || 0,
+      orgIds: memberships?.map(m => m.organisation_id),
+      error: membershipError?.message
+    });
 
     if (membershipError) {
-      console.error('Error loading memberships:', membershipError);
+      console.error('❌ [OrganisationContext] Error loading memberships:', membershipError);
+      setDebugInfo(debug);
       setLoading(false);
       return;
     }
@@ -77,8 +98,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     let orgsError = null;
 
     if (!memberships || memberships.length === 0) {
-      console.log('[OrganisationContext] No memberships found, checking platform admin status');
-      // Check if user is a platform admin
+      console.log('🔍 [OrganisationContext] No memberships found, checking platform admin status');
       const { data: adminCheck, error: adminError } = await supabase
         .from('platform_admins')
         .select('is_active')
@@ -86,69 +106,85 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         .eq('is_active', true)
         .maybeSingle();
 
-      console.log('[OrganisationContext] Admin check result:', { adminCheck, adminError });
+      debug.isAdmin = !!adminCheck;
+      debug.adminError = adminError?.message;
+
+      console.log('🔐 [OrganisationContext] Admin check result:', { isAdmin: !!adminCheck, error: adminError?.message });
 
       if (adminCheck) {
-        console.log('[OrganisationContext] User is platform admin, loading all organisations');
-        // Admin fallback: show all organisations
+        console.log('👑 [OrganisationContext] User is platform admin, loading all organisations');
         const result = await supabase
           .from('organisations')
           .select('id, name, created_at, settings, status')
           .order('created_at', { ascending: false });
 
-        console.log('[OrganisationContext] All orgs query result:', { data: result.data, error: result.error });
+        console.log('📦 [OrganisationContext] All orgs loaded:', result.data?.length || 0, 'organisations');
         orgs = result.data;
         orgsError = result.error;
+        debug.orgCount = orgs?.length || 0;
+        debug.orgNames = orgs?.map((o: any) => o.name) || [];
         setIsAdminView(true);
       } else {
-        console.log('[OrganisationContext] Not an admin and no memberships');
-        // Not an admin and no memberships
+        console.warn('⚠️ [OrganisationContext] Not an admin and no memberships - user cannot see any orgs');
         setOrganisations([]);
         setIsAdminView(false);
+        setDebugInfo(debug);
         setLoading(false);
         return;
       }
     } else {
-      console.log('[OrganisationContext] User has memberships, loading their organisations');
-      // User has memberships, load their organisations
+      console.log('✅ [OrganisationContext] User has', memberships.length, 'active memberships, loading organisations');
       const orgIds = memberships.map(m => m.organisation_id);
 
       const result = await supabase
         .from('organisations')
         .select('id, name, created_at, settings, status')
-        .in('id', orgIds);
+        .in('id', orgIds)
+        .order('name', { ascending: true });
 
-      console.log('[OrganisationContext] Orgs by membership query result:', { data: result.data, error: result.error });
+      debug.orgCount = result.data?.length || 0;
+      debug.orgNames = result.data?.map((o: any) => o.name) || [];
+
+      console.log('📦 [OrganisationContext] Loaded', result.data?.length || 0, 'organisations:', result.data?.map((o: any) => o.name).join(', '));
+
       orgs = result.data;
       orgsError = result.error;
       setIsAdminView(false);
     }
 
     if (orgsError) {
-      console.error('Error loading organisations:', orgsError);
+      console.error('❌ [OrganisationContext] Error loading organisations:', orgsError);
+      debug.orgsError = orgsError.message;
+      setDebugInfo(debug);
       setLoading(false);
       return;
     }
 
     if (orgs) {
       setOrganisations(orgs);
+      console.log('✅ [OrganisationContext] Successfully set', orgs.length, 'organisations in state');
 
       const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
       if (savedOrgId) {
         const savedOrg = orgs.find((o: Organisation) => o.id === savedOrgId);
         if (savedOrg) {
           setCurrentOrganisation(savedOrg);
+          console.log('🎯 [OrganisationContext] Restored saved org:', savedOrg.name);
         } else if (orgs.length > 0) {
           setCurrentOrganisation(orgs[0]);
           localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
+          console.log('🎯 [OrganisationContext] Set first org as current:', orgs[0].name);
         }
       } else if (orgs.length > 0) {
         setCurrentOrganisation(orgs[0]);
         localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
+        console.log('🎯 [OrganisationContext] Set first org as current:', orgs[0].name);
       }
     }
 
+    setDebugInfo(debug);
     setLoading(false);
+    console.log('✅ [OrganisationContext] Load complete. Final org count:', orgs?.length || 0);
   };
 
   const refreshOrganisations = async () => {
@@ -178,6 +214,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         setCurrentOrganisation: handleSetCurrentOrganisation,
         refreshOrganisations,
         hasPermission,
+        debugInfo,
       }}
     >
       {children}
