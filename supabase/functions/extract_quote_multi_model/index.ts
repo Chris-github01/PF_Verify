@@ -91,19 +91,27 @@ const SYSTEM_PROMPT = `You are an expert at extracting structured data from pass
 
 Extract the following information from the quote:
 1. Metadata: supplier name, quote number, date, project details, currency
-2. Line items: each item's description, quantity, unit, unit rate, and line total
-3. Financials: subtotal, tax rate, tax amount, and grand total
+2. Line items: each item's description, quantity, unit, unit rate, and line total from DETAILED BREAKDOWN pages
+3. Financials: subtotal, tax rate, tax amount, and grand total from summary page
 
-CRITICAL INSTRUCTIONS:
-- Extract ALL line items - do not skip any rows or pages
-- Fire protection systems (e.g., SC902, Nullifire, Tenmat, Ryanspan)
-- Units: m² (square meters), lm (linear meters), m (meters), each, Nr, EA, hours
-- Proper arithmetic: quantity × unit_rate = line_total (verify each row)
-- Sum of ALL line items MUST match subtotal exactly
-- Subtotal + tax = grand total (verify)
-- If you see page breaks or section headers, continue extracting all items
-- DO NOT include section headers, subtotals, or notes as line items
-- ONLY include actual priced items with quantities
+CRITICAL INSTRUCTIONS FOR MULTI-PAGE QUOTES:
+- Look for "QUOTE BREAKDOWN" section (typically pages 8-15) - THIS is where ALL line items are listed
+- The first page summary shows categories (e.g., "COLLAR $540,242", "CAVITY BARRIER $309,869") but NOT individual items
+- Extract EVERY individual row from the detailed breakdown tables
+- Each row should have: Service/Description, Size, Substrate, Quantity, Base Rate, and calculated Total
+- Fire protection systems: SC902, Nullifire, Tenmat FF102, Ryanspan (with/without brackets), PVC Pipe, Steel Pipe, Cable Bundle
+- Linear works: Cavity Barrier (Tenmat), Compressive Seal (Ryanspan), Door Perimeter Seals
+- Units: m² (sqm), lm (linear meters), m (meters), ea., Nr, EA
+- Parse building sections separately: Building A, Block B, Block C, Undercroft
+- DO NOT skip any pages with "Page X of 15" headers
+- Verify: Sum of ALL detailed line items = subtotal from page 1
+- Include markup/contingency as separate line item if present
+
+FINANCIAL VALIDATION:
+- Extract the GRAND TOTAL from the summary page (page 1)
+- This should be the sum of all detailed line items
+- Look for "MISCELLANEOUS" section with cost increases/contingencies
+- Include contingency as a separate line item
 
 Return a valid JSON object matching the schema exactly.`;
 
