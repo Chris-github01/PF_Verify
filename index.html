@@ -5,26 +5,6 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PassiveFire Verify+ Web App</title>
-    <script>
-      window.chmln = window.chmln || { get: function() { return null; }, set: function() {}, track: function() {} };
-      window.messo = window.messo || {};
-
-      window.addEventListener('error', function(e) {
-        if (e.filename && (e.filename.includes('chmln.js') || e.filename.includes('messo.min.js'))) {
-          e.preventDefault();
-          console.warn('External script error suppressed:', e.filename);
-          return true;
-        }
-      }, true);
-
-      window.addEventListener('unhandledrejection', function(e) {
-        if (e.reason && e.reason.message && (e.reason.message.includes('chmln') || e.reason.message.includes('messo'))) {
-          e.preventDefault();
-          console.warn('External script promise rejection suppressed');
-          return true;
-        }
-      });
-    </script>
   </head>
   <body>
     <div id="root"></div>
