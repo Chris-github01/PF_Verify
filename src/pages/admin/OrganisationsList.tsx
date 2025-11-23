@@ -60,11 +60,9 @@ export default function OrganisationsList() {
             ownerEmail = profile?.email || '';
           }
 
-          const { data: subscription } = await supabase
-            .from('subscriptions')
-            .select('plan_name')
-            .eq('organisation_id', org.id)
-            .maybeSingle();
+          const subscription = {
+            plan_name: org.pricing_tier || 'standard'
+          };
 
           const { count: projectCount } = await supabase
             .from('projects')

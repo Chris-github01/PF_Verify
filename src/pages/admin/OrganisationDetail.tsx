@@ -70,11 +70,11 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
         year: 'numeric',
       }));
 
-      const { data: sub } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('organisation_id', organisationId)
-        .maybeSingle();
+      const sub = org ? {
+        plan_name: org.pricing_tier || 'standard',
+        seat_limit: org.seat_limit,
+        organisation_id: org.id
+      } : null;
 
       setSubscription(sub);
       setPlanName(sub?.plan_name || 'Trial');
@@ -145,19 +145,13 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
     try {
       const { error: orgError } = await supabase
         .from('organisations')
-        .update({ seat_limit: seatLimit })
+        .update({
+          seat_limit: seatLimit,
+          pricing_tier: planName.toLowerCase()
+        })
         .eq('id', organisationId);
 
       if (orgError) throw orgError;
-
-      if (subscription) {
-        const { error: subError } = await supabase
-          .from('subscriptions')
-          .update({ plan_name: planName, seat_limit: seatLimit })
-          .eq('organisation_id', organisationId);
-
-        if (subError) throw subError;
-      }
 
       setToast({ type: 'success', message: 'Changes saved successfully' });
       setEditMode(false);

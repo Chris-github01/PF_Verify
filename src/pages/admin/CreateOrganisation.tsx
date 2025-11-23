@@ -31,24 +31,15 @@ export default function CreateOrganisation() {
         .insert({
           name,
           status: plan === 'Trial' ? 'trial' : 'active',
+          subscription_status: plan === 'Trial' ? 'trial' : 'active',
           seat_limit: seatLimit,
           created_by_user_id: currentUser?.id,
+          pricing_tier: plan.toLowerCase(),
         })
         .select()
         .single();
 
       if (orgError) throw orgError;
-
-      const { error: subError } = await supabase
-        .from('subscriptions')
-        .insert({
-          organisation_id: org.id,
-          plan_name: plan,
-          seat_limit: seatLimit,
-          billing_status: 'active',
-        });
-
-      if (subError) throw subError;
 
       let ownerId = '';
       let memberStatus = 'invited';
