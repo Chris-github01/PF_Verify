@@ -1,7 +1,8 @@
 // PERMANENT FIX FOR CHRIS – DO NOT REGRESS – USER MUST SEE "Pi" ORG
+// CRITICAL: Wait for user session to load before rendering organisation selector
 import { Building2, AlertCircle, Loader2, Shield, Bug, Check, ChevronRight, User, LogOut } from 'lucide-react';
 import { useOrganisation } from '../lib/organisationContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface OrganisationPickerProps {
@@ -14,13 +15,23 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
   const [showDebug, setShowDebug] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [userLoading, setUserLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const isDev = import.meta.env.DEV;
 
-  useState(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserEmail(user.email || '');
-    });
-  });
+  useEffect(() => {
+    const loadUser = async () => {
+      setUserLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('🔑 [OrganisationPicker] User loaded:', user?.id, user?.email);
+      if (user) {
+        setCurrentUser(user);
+        setUserEmail(user.email || '');
+      }
+      setUserLoading(false);
+    };
+    loadUser();
+  }, []);
 
   const handleSelect = (orgId: string) => {
     const org = organisations.find(o => o.id === orgId);
@@ -43,6 +54,36 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
       .toUpperCase()
       .slice(0, 2);
   };
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="mx-auto mb-4 text-blue-600 animate-spin" size={48} />
+          <p className="text-gray-600">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    console.error('❌ [OrganisationPicker] No authenticated user found');
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <AlertCircle className="mx-auto mb-4 text-red-500" size={48} />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Authentication Required</h2>
+          <p className="text-gray-600 mb-4">Please sign in to continue</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
