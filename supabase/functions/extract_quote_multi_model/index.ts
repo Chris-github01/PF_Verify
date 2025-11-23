@@ -94,12 +94,16 @@ Extract the following information from the quote:
 2. Line items: each item's description, quantity, unit, unit rate, and line total
 3. Financials: subtotal, tax rate, tax amount, and grand total
 
-Pay special attention to:
-- Fire protection systems (e.g., SC902, Nullifire, Tenmat)
-- Units: m² (square meters), lm (linear meters), each, hours
-- Proper arithmetic: quantity × unit_rate = line_total
-- Sum of line items should match subtotal
-- Subtotal + tax = grand total
+CRITICAL INSTRUCTIONS:
+- Extract ALL line items - do not skip any rows or pages
+- Fire protection systems (e.g., SC902, Nullifire, Tenmat, Ryanspan)
+- Units: m² (square meters), lm (linear meters), m (meters), each, Nr, EA, hours
+- Proper arithmetic: quantity × unit_rate = line_total (verify each row)
+- Sum of ALL line items MUST match subtotal exactly
+- Subtotal + tax = grand total (verify)
+- If you see page breaks or section headers, continue extracting all items
+- DO NOT include section headers, subtotals, or notes as line items
+- ONLY include actual priced items with quantities
 
 Return a valid JSON object matching the schema exactly.`;
 
@@ -124,7 +128,8 @@ async function callOpenAI(text: string): Promise<any> {
           schema: SCHEMA,
         },
       },
-      temperature: 0.1,
+      temperature: 0,
+      seed: 42,
     }),
   });
 
@@ -154,7 +159,7 @@ async function callAnthropic(text: string): Promise<any> {
           content: `${SYSTEM_PROMPT}\n\nExtract data from this quote and return valid JSON:\n\n${text}`,
         },
       ],
-      temperature: 0.1,
+      temperature: 0,
     }),
   });
 
@@ -197,6 +202,33 @@ function validate(quote: any): any {
     });
   }
 
+  let arithmeticErrors = 0;
+  (quote.line_items || []).forEach((item: any, index: number) => {
+    if (item.quantity && item.unit_rate && item.line_total) {
+      const expected = item.quantity * item.unit_rate;
+      const diff = Math.abs(expected - item.line_total);
+      if (diff > 0.02) {
+        arithmeticErrors++;
+        if (arithmeticErrors <= 3) {
+          warnings.push({
+            type: "arithmetic",
+            field: `line_items[${index}].line_total`,
+            message: `Line item ${index + 1} arithmetic mismatch: ${item.quantity} × ${item.unit_rate} = ${expected.toFixed(2)}, but line_total is ${item.line_total}`,
+            severity: "medium",
+          });
+        }
+      }
+    }
+  });
+
+  if (arithmeticErrors > 0) {
+    checks.push({
+      name: "line_item_arithmetic",
+      passed: false,
+      message: `${arithmeticErrors} line items have arithmetic errors`,
+    });
+  }
+
   const lineItemsTotal = (quote.line_items || []).reduce(
     (sum: number, item: any) => sum + (item.line_total || 0),
     0
@@ -204,25 +236,36 @@ function validate(quote: any): any {
 
   if (quote.financials?.subtotal) {
     const diff = Math.abs(lineItemsTotal - quote.financials.subtotal);
+    const percentDiff = (diff / quote.financials.subtotal) * 100;
     const passed = diff <= 0.02;
     checks.push({
       name: "line_items_sum_to_subtotal",
       passed,
       message: passed
         ? `Line items sum correctly to subtotal`
-        : `Line items sum mismatch: $${lineItemsTotal.toFixed(2)} vs $${quote.financials.subtotal.toFixed(2)}`,
+        : `Line items sum mismatch: $${lineItemsTotal.toFixed(2)} vs $${quote.financials.subtotal.toFixed(2)} (${percentDiff.toFixed(1)}% difference)`,
     });
 
-    if (!passed && diff > 1) {
+    if (!passed) {
+      const severity = percentDiff > 5 ? "critical" : diff > 100 ? "high" : "medium";
       errors.push({
         type: "arithmetic",
         field: "financials.subtotal",
-        message: `Sum of line items does not match subtotal`,
-        severity: "high",
+        message: `Sum of line items does not match subtotal - possible missing items`,
+        severity,
         expected: lineItemsTotal,
         actual: quote.financials.subtotal,
+        difference: diff,
+        percent_difference: percentDiff,
       });
     }
+  } else {
+    errors.push({
+      type: "missing_required",
+      field: "financials.subtotal",
+      message: "Subtotal is missing",
+      severity: "high",
+    });
   }
 
   if (quote.financials?.subtotal && quote.financials?.tax_amount && quote.financials?.grand_total) {
