@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload, FileUp, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useOrganisation } from '../lib/organisationContext';
 import { parsePDF } from '../lib/parsers/pdfParser';
 import { parseExcel, parseCSV } from '../lib/parsers/excelParser';
 import ImportPreviewNew from '../components/ImportPreviewNew';
@@ -23,6 +24,7 @@ interface ImportQuotesProps {
 }
 
 export default function ImportQuotes({ projectId, onQuotesImported, onNavigateToDashboard }: ImportQuotesProps) {
+  const { currentOrganisation } = useOrganisation();
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
   const [useBackgroundParsing, setUseBackgroundParsing] = useState(true);
@@ -159,10 +161,15 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         if (isPdf) {
           console.log(`PDF detected: ${file.name}, trying external extractor first...`);
 
+          if (!currentOrganisation?.id) {
+            throw new Error('No organisation selected');
+          }
+
           const formData = new FormData();
           formData.append('file', file);
           formData.append('projectId', projectId);
           formData.append('supplierName', supplierName.trim());
+          formData.append('organisationId', currentOrganisation.id);
 
           const extractorUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse_quote_with_extractor`;
           const extractorHeaders = {

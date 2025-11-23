@@ -39,10 +39,11 @@ Deno.serve(async (req: Request) => {
     const file = formData.get("file") as File;
     const projectId = formData.get("projectId") as string;
     const supplierName = formData.get("supplierName") as string;
+    const organisationId = formData.get("organisationId") as string;
 
-    if (!projectId || !supplierName || !file) {
+    if (!projectId || !supplierName || !file || !organisationId) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: projectId, supplierName, or file" }),
+        JSON.stringify({ error: "Missing required fields: projectId, supplierName, organisationId, or file" }),
         {
           status: 400,
           headers: {
@@ -70,17 +71,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get user's organization
-    const { data: membership } = await supabase
+    // Verify user belongs to the specified organisation
+    const { data: membership, error: membershipError } = await supabase
       .from("organisation_members")
       .select("organisation_id")
       .eq("user_id", user.id)
+      .eq("organisation_id", organisationId)
       .eq("status", "active")
-      .single();
+      .maybeSingle();
 
     if (!membership) {
+      console.error("User not a member of organisation:", { userId: user.id, organisationId, membershipError });
       return new Response(
-        JSON.stringify({ error: "User not associated with an organization" }),
+        JSON.stringify({ error: "User not authorized for this organisation" }),
         {
           status: 403,
           headers: {
@@ -90,8 +93,6 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    const organisationId = membership.organisation_id;
     const fileName = file.name;
 
     // Upload file to Supabase storage
