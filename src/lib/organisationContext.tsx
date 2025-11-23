@@ -31,37 +31,48 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdminView, setIsAdminView] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
-    loadOrganisations();
-  }, []);
+    console.log('🔄 [OrganisationContext] Setting up auth listener...');
 
-  const loadOrganisations = async (retryCount = 0) => {
-    setLoading(true);
-    const debug: any = { timestamp: new Date().toISOString(), retryCount };
-
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-    debug.session = session ? { user_id: session.user.id, expires_at: session.expires_at } : null;
-    debug.sessionError = sessionError?.message;
-
-    console.log('🔍 [OrganisationContext] Session check:', {
-      hasSession: !!session,
-      userId: session?.user?.id,
-      email: session?.user?.email,
-      retry: retryCount,
-      sessionError: sessionError?.message
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔄 [OrganisationContext] Initial session check:', { hasSession: !!session });
+      setSessionReady(true);
+      if (session) {
+        loadOrganisations();
+      } else {
+        setLoading(false);
+      }
     });
 
-    if (!session || !session.user) {
-      if (retryCount < 3) {
-        console.log('⏳ [OrganisationContext] Session not ready, retrying in 600ms... (attempt', retryCount + 1, 'of 3)');
-        await new Promise(resolve => setTimeout(resolve, 600));
-        return loadOrganisations(retryCount + 1);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔄 [OrganisationContext] Auth state changed:', event, { hasSession: !!session });
+      if (event === 'SIGNED_IN' && session) {
+        setSessionReady(true);
+        loadOrganisations();
+      } else if (event === 'SIGNED_OUT') {
+        setSessionReady(false);
+        setOrganisations([]);
+        setCurrentOrganisation(null);
+        setLoading(false);
       }
+    });
 
-      console.log('ℹ️ [OrganisationContext] No session found - user not logged in');
-      setDebugInfo({ ...debug, info: 'No session - user not logged in' });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const loadOrganisations = async () => {
+    setLoading(true);
+    const debug: any = { timestamp: new Date().toISOString() };
+
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session || !session.user) {
+      console.warn('⚠️ [OrganisationContext] loadOrganisations called without session');
+      setDebugInfo({ ...debug, error: 'Called without session' });
       setOrganisations([]);
       setLoading(false);
       return;
@@ -69,6 +80,8 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
     const user = session.user;
     debug.user = { id: user.id, email: user.email };
+
+    console.log('🔍 [OrganisationContext] Loading organisations for user:', user.id, user.email);
 
     // Check if admin is impersonating
     const impersonatedOrgId = getImpersonatedOrgId();
