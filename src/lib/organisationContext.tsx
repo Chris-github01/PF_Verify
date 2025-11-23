@@ -40,23 +40,35 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const debug: any = { timestamp: new Date().toISOString(), retryCount };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    debug.user = user ? { id: user.id, email: user.email } : null;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    console.log('🔍 [OrganisationContext] Fetching orgs for user ID:', user?.id, 'email:', user?.email, 'retry:', retryCount);
+    debug.session = session ? { user_id: session.user.id, expires_at: session.expires_at } : null;
+    debug.sessionError = sessionError?.message;
 
-    if (!user) {
-      if (retryCount < 3) {
-        console.log('⏳ [OrganisationContext] User not loaded yet, retrying in 500ms... (attempt', retryCount + 1, 'of 3)');
-        await new Promise(resolve => setTimeout(resolve, 500));
+    console.log('🔍 [OrganisationContext] Session check:', {
+      hasSession: !!session,
+      userId: session?.user?.id,
+      email: session?.user?.email,
+      retry: retryCount,
+      sessionError: sessionError?.message
+    });
+
+    if (!session || !session.user) {
+      if (retryCount < 5) {
+        console.log('⏳ [OrganisationContext] Session not ready, retrying in 800ms... (attempt', retryCount + 1, 'of 5)');
+        await new Promise(resolve => setTimeout(resolve, 800));
         return loadOrganisations(retryCount + 1);
       }
 
-      console.warn('⚠️ [OrganisationContext] No authenticated user found after 3 retries');
-      setDebugInfo({ ...debug, error: 'No authenticated user after retries' });
+      console.error('❌ [OrganisationContext] No session after 5 retries - redirecting to login');
+      setDebugInfo({ ...debug, error: 'No session after retries' });
       setLoading(false);
+      window.location.href = '/';
       return;
     }
+
+    const user = session.user;
+    debug.user = { id: user.id, email: user.email };
 
     // Check if admin is impersonating
     const impersonatedOrgId = getImpersonatedOrgId();

@@ -61,17 +61,25 @@ function AppContent() {
   useEffect(() => {
     const loadTimeout = setTimeout(() => {
       if (authLoading) {
-        console.warn('Auth loading timeout - forcing completion');
+        console.warn('⚠️ [App] Auth loading timeout after 8s - forcing completion');
         setAuthLoading(false);
       }
-    }, 5000);
+    }, 8000);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    console.log('🔐 [App] Initializing authentication...');
+
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('🔐 [App] Session loaded:', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        email: session?.user?.email,
+        error: error?.message
+      });
       setSession(session);
       setAuthLoading(false);
       clearTimeout(loadTimeout);
     }).catch((error) => {
-      console.error('Error loading session:', error);
+      console.error('❌ [App] Error loading session:', error);
       setAuthLoading(false);
       clearTimeout(loadTimeout);
     });
@@ -79,6 +87,11 @@ function AppContent() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('🔄 [App] Auth state changed:', {
+        event: _event,
+        hasSession: !!session,
+        userId: session?.user?.id
+      });
       (async () => {
         setSession(session);
       })();
