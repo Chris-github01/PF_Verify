@@ -224,6 +224,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         formData.append('file', file);
         formData.append('projectId', projectId);
         formData.append('supplierName', supplierName.trim());
+        formData.append('organisationId', currentOrganisation.id);
 
         const jobUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start_parsing_job`;
         const jobHeaders = {
