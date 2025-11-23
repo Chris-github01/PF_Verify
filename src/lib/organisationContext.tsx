@@ -1,5 +1,6 @@
 // PERMANENT FIX FOR CHRIS – DO NOT REGRESS – USER MUST SEE "Pi" ORG
 // This context properly fetches organisations via organisation_members junction table
+// CRITICAL FIX 23 Nov 2025 – NEVER select organisations.settings again – column was removed and broke all org loading
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase';
 import { getImpersonatedOrgId, isImpersonating } from './admin/adminApi';
@@ -8,7 +9,7 @@ interface Organisation {
   id: string;
   name: string;
   created_at: string;
-  settings?: any;
+  status?: string;
 }
 
 interface OrganisationContextType {
@@ -115,7 +116,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         console.log('👑 [OrganisationContext] User is platform admin, loading all organisations');
         const result = await supabase
           .from('organisations')
-          .select('id, name, created_at, settings, status')
+          .select('id, name, created_at, status')
           .order('created_at', { ascending: false });
 
         console.log('📦 [OrganisationContext] All orgs loaded:', result.data?.length || 0, 'organisations');
@@ -138,7 +139,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
       const result = await supabase
         .from('organisations')
-        .select('id, name, created_at, settings, status')
+        .select('id, name, created_at, status')
         .in('id', orgIds)
         .order('name', { ascending: true });
 
