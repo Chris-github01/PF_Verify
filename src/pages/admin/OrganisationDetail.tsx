@@ -143,11 +143,20 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
     setSaving(true);
     try {
+      const planTierMap: Record<string, string> = {
+        'Trial': 'trial',
+        'Starter': 'standard',
+        'Pro': 'professional',
+        'Enterprise': 'enterprise'
+      };
+
+      const pricingTier = planTierMap[planName] || 'standard';
+
       const { error: orgError } = await supabase
         .from('organisations')
         .update({
           seat_limit: seatLimit,
-          pricing_tier: planName.toLowerCase()
+          pricing_tier: pricingTier
         })
         .eq('id', organisationId);
 

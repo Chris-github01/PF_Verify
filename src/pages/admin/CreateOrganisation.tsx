@@ -26,6 +26,15 @@ export default function CreateOrganisation() {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
 
+      const planTierMap: Record<string, string> = {
+        'Trial': 'trial',
+        'Starter': 'standard',
+        'Pro': 'professional',
+        'Enterprise': 'enterprise'
+      };
+
+      const pricingTier = planTierMap[plan] || 'standard';
+
       const { data: org, error: orgError } = await supabase
         .from('organisations')
         .insert({
@@ -34,7 +43,7 @@ export default function CreateOrganisation() {
           subscription_status: plan === 'Trial' ? 'trial' : 'active',
           seat_limit: seatLimit,
           created_by_user_id: currentUser?.id,
-          pricing_tier: plan.toLowerCase(),
+          pricing_tier: pricingTier,
         })
         .select()
         .single();
