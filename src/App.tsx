@@ -23,6 +23,7 @@ import ToastContainer from './components/ToastContainer';
 import AppFooter from './components/AppFooter';
 import CopilotDrawer from './components/CopilotDrawer';
 import Login from './pages/Login';
+import LandingPage from './pages/LandingPage';
 import ModeSelector from './pages/ModeSelector';
 import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
@@ -43,6 +44,7 @@ interface ProjectInfo {
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showLanding, setShowLanding] = useState(true);
   const [selectedMode, setSelectedMode] = useState<'admin' | 'app' | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>('dashboard');
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -618,6 +620,9 @@ function AppContent() {
   }
 
   if (!session) {
+    if (showLanding) {
+      return <LandingPage onSignIn={() => setShowLanding(false)} />;
+    }
     return <Login />;
   }
 

@@ -1,7 +1,8 @@
 // PERMANENT FIX FOR CHRIS – DO NOT REGRESS – USER MUST SEE "Pi" ORG
-import { Building2, AlertCircle, Loader2, ChevronDown, Shield, Bug } from 'lucide-react';
+import { Building2, AlertCircle, Loader2, Shield, Bug, Check, ChevronRight, User, LogOut } from 'lucide-react';
 import { useOrganisation } from '../lib/organisationContext';
 import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface OrganisationPickerProps {
   onOrganisationSelected: () => void;
@@ -9,21 +10,38 @@ interface OrganisationPickerProps {
 
 export default function OrganisationPicker({ onOrganisationSelected }: OrganisationPickerProps) {
   const { organisations, setCurrentOrganisation, loading, isAdminView, debugInfo } = useOrganisation();
-  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [error, setError] = useState('');
   const [showDebug, setShowDebug] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const isDev = import.meta.env.DEV;
 
-  const handleSelect = () => {
-    if (!selectedOrgId) {
-      setError('Please select an organisation');
-      return;
-    }
-    const org = organisations.find(o => o.id === selectedOrgId);
+  useState(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserEmail(user.email || '');
+    });
+  });
+
+  const handleSelect = (orgId: string) => {
+    const org = organisations.find(o => o.id === orgId);
     if (org) {
       setCurrentOrganisation(org);
       onOrganisationSelected();
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   if (loading) {
@@ -38,52 +56,104 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-6">
-          <Building2 className="mx-auto mb-4 text-blue-600" size={48} />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Select Organisation</h1>
-          <p className="text-gray-600">Choose which organisation to work with</p>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="text-blue-600" size={32} />
+              <span className="text-xl font-bold text-gray-900">PassiveFire Verify+</span>
+            </div>
+
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                  {userEmail ? userEmail[0].toUpperCase() : 'U'}
+                </div>
+                <span className="hidden sm:block text-sm font-medium text-gray-700">{userEmail}</span>
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                  <div className="px-4 py-3 border-b border-gray-200">
+                    <p className="text-sm font-medium text-gray-900">Signed in as</p>
+                    <p className="text-sm text-gray-600 truncate">{userEmail}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                  >
+                    <LogOut size={16} />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Your Organisations</h1>
+          <p className="text-lg text-gray-600">Select an organisation to continue</p>
           {isAdminView && (
-            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full">
-              <Shield size={14} />
-              Admin view: showing all organisations
+            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+              <Shield size={16} />
+              Platform Admin View
             </div>
           )}
         </div>
 
         {organisations.length > 0 ? (
-          <div className="space-y-4">
-            <div className="relative">
-              <select
-                value={selectedOrgId}
-                onChange={(e) => {
-                  setSelectedOrgId(e.target.value);
-                  setError('');
-                }}
-                className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 appearance-none cursor-pointer"
-              >
-                <option value="">Select an organisation...</option>
-                {organisations.map((org) => (
-                  <option key={org.id} value={org.id}>
+          <>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {organisations.map((org) => (
+                <button
+                  key={org.id}
+                  onClick={() => handleSelect(org.id)}
+                  className="group bg-white rounded-xl border-2 border-gray-200 p-6 hover:border-blue-500 hover:shadow-lg transition-all text-left"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-sm">
+                      {getInitials(org.name)}
+                    </div>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                        <Check className="text-white" size={16} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                     {org.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+                  </h3>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {org.status === 'trial' ? 'Trial' : 'Active'}
+                    </span>
+                    <ChevronRight className="text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" size={20} />
+                  </div>
+                </button>
+              ))}
             </div>
 
-            {error && (
-              <div className="text-red-600 text-sm">{error}</div>
+            {isAdminView && (
+              <div className="text-center">
+                <a
+                  href="/admin"
+                  className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  <Shield size={18} />
+                  Open Admin Console
+                </a>
+              </div>
             )}
-
-            <button
-              onClick={handleSelect}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Continue
-            </button>
-          </div>
+          </>
         ) : (
           <div className="text-center py-8">
             <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
@@ -121,7 +191,7 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
             )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
