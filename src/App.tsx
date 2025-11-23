@@ -24,6 +24,7 @@ import AppFooter from './components/AppFooter';
 import CopilotDrawer from './components/CopilotDrawer';
 import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
+import Pricing from './pages/Pricing';
 import ModeSelector from './pages/ModeSelector';
 import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
@@ -45,6 +46,7 @@ function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showLanding, setShowLanding] = useState(true);
+  const [showPricing, setShowPricing] = useState(false);
   const [selectedMode, setSelectedMode] = useState<'admin' | 'app' | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>('dashboard');
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -633,8 +635,23 @@ function AppContent() {
   }
 
   if (!session) {
+    if (showPricing) {
+      return <Pricing
+        onStartTrial={() => {
+          setShowPricing(false);
+          setShowLanding(false);
+        }}
+        onBookDemo={() => {
+          setShowPricing(false);
+          setShowLanding(false);
+        }}
+      />;
+    }
     if (showLanding) {
-      return <LandingPage onSignIn={() => setShowLanding(false)} />;
+      return <LandingPage
+        onSignIn={() => setShowLanding(false)}
+        onViewPricing={() => setShowPricing(true)}
+      />;
     }
     return <Login />;
   }

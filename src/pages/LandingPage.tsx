@@ -3,9 +3,10 @@ import { useState } from 'react';
 
 interface LandingPageProps {
   onSignIn: () => void;
+  onViewPricing?: () => void;
 }
 
-export default function LandingPage({ onSignIn }: LandingPageProps) {
+export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProps) {
   const [showDemoModal, setShowDemoModal] = useState(false);
 
   const trustedCompanies = [
@@ -30,7 +31,7 @@ export default function LandingPage({ onSignIn }: LandingPageProps) {
 
             <div className="hidden md:flex items-center gap-8">
               <a href="#how-it-works" className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium">How It Works</a>
-              <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium">Pricing</a>
+              <button onClick={onViewPricing} className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium">Pricing</button>
               <a href="#customers" className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium">Customers</a>
               <a href="#resources" className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium">Resources</a>
               <a href="#support" className="text-sm text-gray-600 hover:text-gray-900 transition-colors font-medium">Support</a>
