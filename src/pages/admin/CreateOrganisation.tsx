@@ -24,8 +24,6 @@ export default function CreateOrganisation() {
 
     setCreating(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-
       const planTierMap: Record<string, string> = {
         'Trial': 'trial',
         'Starter': 'standard',
@@ -34,26 +32,10 @@ export default function CreateOrganisation() {
       };
 
       const pricingTier = planTierMap[plan] || 'standard';
-
-      const { data: org, error: orgError } = await supabase
-        .from('organisations')
-        .insert({
-          name,
-          status: plan === 'Trial' ? 'trial' : 'active',
-          subscription_status: plan === 'Trial' ? 'trial' : 'active',
-          seat_limit: seatLimit,
-          created_by_user_id: currentUser?.id,
-          pricing_tier: pricingTier,
-        })
-        .select()
-        .single();
-
-      if (orgError) throw orgError;
+      const status = plan === 'Trial' ? 'trial' : 'active';
 
       let ownerId = '';
-      let memberStatus = 'invited';
 
-      // Check if user exists in auth.users
       const { data: { users: existingUsers }, error: userLookupError } = await supabase.auth.admin.listUsers();
 
       if (userLookupError) {
@@ -64,7 +46,6 @@ export default function CreateOrganisation() {
 
       if (existingUser) {
         ownerId = existingUser.id;
-        memberStatus = 'active';
       } else {
         const tempPassword = Math.random().toString(36).slice(-12);
         const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
@@ -77,19 +58,19 @@ export default function CreateOrganisation() {
         ownerId = newUser.user.id;
       }
 
-      const { error: memberError } = await supabase
-        .from('organisation_members')
-        .insert({
-          organisation_id: org.id,
-          user_id: ownerId,
-          role: 'owner',
-          status: memberStatus,
-          invited_by_user_id: currentUser?.id,
+      const { data: result, error: createError } = await supabase
+        .rpc('create_organisation_with_owner', {
+          p_name: name,
+          p_status: status,
+          p_seat_limit: seatLimit,
+          p_pricing_tier: pricingTier,
+          p_owner_user_id: ownerId
         });
 
-      if (memberError) throw memberError;
+      if (createError) throw createError;
 
-      window.location.href = `/admin/organisations/${org.id}`;
+      const orgId = result.id;
+      window.location.href = `/admin/organisations/${orgId}`;
     } catch (error: any) {
       console.error('Error creating organisation:', error);
       setToast({ type: 'error', message: error.message || 'Failed to create organisation' });
