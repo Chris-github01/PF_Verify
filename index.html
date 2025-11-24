@@ -5,40 +5,6 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PassiveFire Verify+ Web App</title>
-    <script>
-      window.chmln = { get: function() { return null; }, set: function() {}, track: function() {} };
-      window.messo = { init: function() {}, track: function() {} };
-
-      const originalFetch = window.fetch;
-      window.fetch = function() {
-        const url = arguments[0];
-        if (typeof url === 'string' && (url.includes('chmln') || url.includes('messo') || url.includes('fetch-worker'))) {
-          return Promise.resolve(new Response('{}', { status: 200 }));
-        }
-        return originalFetch.apply(this, arguments);
-      };
-
-      window.addEventListener('error', function(e) {
-        if (e.filename && (e.filename.includes('chmln') || e.filename.includes('messo') || e.filename.includes('staticblitz') || e.filename.includes('fetch-worker'))) {
-          e.preventDefault();
-          return true;
-        }
-        if (e.message && (e.message.includes('chmln') || e.message.includes('messo'))) {
-          e.preventDefault();
-          return true;
-        }
-      }, true);
-
-      window.addEventListener('unhandledrejection', function(e) {
-        if (e.reason) {
-          const msg = e.reason.message || String(e.reason);
-          if (msg.includes('chmln') || msg.includes('messo') || msg.includes('fetch-worker')) {
-            e.preventDefault();
-            return true;
-          }
-        }
-      });
-    </script>
   </head>
   <body>
     <div id="root"></div>
