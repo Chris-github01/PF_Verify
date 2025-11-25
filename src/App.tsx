@@ -63,10 +63,10 @@ function AppContent() {
   useEffect(() => {
     const loadTimeout = setTimeout(() => {
       if (authLoading) {
-        console.warn('⚠️ [App] Auth loading timeout after 8s - forcing completion');
+        console.warn('⚠️ [App] Auth loading timeout after 5s - forcing completion');
         setAuthLoading(false);
       }
-    }, 8000);
+    }, 5000);
 
     console.log('🔐 [App] Initializing authentication...');
 
@@ -634,11 +634,17 @@ function AppContent() {
   };
 
   if (authLoading || orgLoading || adminLoading) {
+    console.log('🔄 [App] Loading states:', { authLoading, orgLoading, adminLoading });
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
+          {process.env.NODE_ENV === 'development' && (
+            <p className="text-xs text-gray-400 mt-2">
+              Auth: {authLoading ? '⏳' : '✓'} | Org: {orgLoading ? '⏳' : '✓'} | Admin: {adminLoading ? '⏳' : '✓'}
+            </p>
+          )}
         </div>
       </div>
     );

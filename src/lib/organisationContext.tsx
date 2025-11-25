@@ -36,6 +36,11 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log('🔄 [OrganisationContext] Setting up auth listener...');
 
+    const loadTimeout = setTimeout(() => {
+      console.warn('⚠️ [OrganisationContext] Loading timeout after 5s - forcing completion');
+      setLoading(false);
+    }, 5000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('🔄 [OrganisationContext] Initial session check:', { hasSession: !!session });
       setSessionReady(true);
@@ -44,6 +49,11 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       } else {
         setLoading(false);
       }
+      clearTimeout(loadTimeout);
+    }).catch((error) => {
+      console.error('❌ [OrganisationContext] Error getting session:', error);
+      setLoading(false);
+      clearTimeout(loadTimeout);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -61,6 +71,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
     return () => {
       subscription.unsubscribe();
+      clearTimeout(loadTimeout);
     };
   }, []);
 
