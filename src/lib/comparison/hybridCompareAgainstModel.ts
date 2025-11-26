@@ -46,8 +46,12 @@ export async function compareAgainstModelHybrid(
   let skippedCount = 0;
   let mappedCount = 0;
 
+  // Pre-build a Map for O(1) lookups instead of O(n) Array.find() calls
+  // This reduces overall complexity from O(n*m) to O(n+m)
+  const mappingsByQuoteItemId = new Map(mappings.map(m => [m.quoteItemId, m]));
+
   for (const line of normalisedLines) {
-    const mapping = mappings.find(m => m.quoteItemId === line.quoteItemId);
+    const mapping = mappingsByQuoteItemId.get(line.quoteItemId);
 
     if (!mapping) {
       console.warn('compareAgainstModelHybrid: No mapping found for quote item:', line.quoteItemId);
